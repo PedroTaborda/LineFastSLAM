@@ -1,5 +1,16 @@
+# videos and image folder
+images/
+*.mp4
+
 # rosbags
 *.bag
+
+# compressed files
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
