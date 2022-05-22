@@ -2,8 +2,14 @@
 # ex:
 # landmark <id> <x> <y>
 
-landmark 0 -10.0 1.0
-landmark 1 10.0 1.0
+landmark 0 -5.0 5.0
+landmark 1 5.0 5.0
+landmark 2 5.0 -5.0
+landmark 3 -5.0 -5.0
+landmark 4 -5.0 5.0
 
-landmark 3 -10.0 -1.0
-landmark 4 10.0 -1.0
+landmark 6 -2.0 -2.0
+landmark 7 -1.0 -2.0
+landmark 8 -1.0 -1.0
+landmark 9 -2.0 -1.0
+landmark 10 -2.0 -2.0

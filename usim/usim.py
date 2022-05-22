@@ -148,27 +148,24 @@ if __name__=="__main__":
     elif simulation_mode == 'plot_data':
         ...
 
-    plt.ion()
+
+def plot_frame(frame, senso_data):
     plt.figure(1)
-    robot_trajectory_x = []
-    robot_trajectory_y = []
-    for data_point in sensor_data:
-        odometry, landmarks, lidar = data_point
+    plt.clf()
+    data_point = sensor_data[frame]
+    odometry, landmarks, lidar = data_point
 
-        heading, x, y = odometry
-        measurement_cloud_x = []
-        measurement_cloud_y = []
-        robot_trajectory_x += [x]
-        robot_trajectory_y += [y]
-        for index, distance in enumerate(lidar):
-            if distance == 0:
-                continue
+    heading, x, y = odometry
+    measurement_cloud_x = []
+    measurement_cloud_y = []
+    for index, distance in enumerate(lidar):
+        if distance == 0:
+            continue
 
-            angle = heading + index
+        angle = heading + index
 
-            measurement_cloud_x += [x + distance * np.cos(np.deg2rad(angle))]
-            measurement_cloud_y += [y + distance * np.sin(np.deg2rad(angle))]
+        measurement_cloud_x += [x + distance * np.cos(np.deg2rad(angle))]
+        measurement_cloud_y += [y + distance * np.sin(np.deg2rad(angle))]
 
-        plt.scatter(measurement_cloud_x, measurement_cloud_y)
-    plt.scatter(robot_trajectory_x, robot_trajectory_y)
+    plt.scatter(measurement_cloud_x, measurement_cloud_y)
     plt.show()
