@@ -1,0 +1,9 @@
+# <cmd> <args>
+# ex:
+# landmark <id> <x> <y>
+
+landmark 0 -10.0 1.0
+landmark 1 10.0 1.0
+
+landmark 3 -10.0 -1.0
+landmark 4 10.0 -1.0
