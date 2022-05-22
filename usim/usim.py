@@ -149,7 +149,7 @@ if __name__=="__main__":
         ...
 
 
-def plot_frame(frame, senso_data):
+def plot_frame(frame, sensor_data):
     plt.figure(1)
     plt.clf()
     data_point = sensor_data[frame]

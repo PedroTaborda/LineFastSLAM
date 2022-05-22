@@ -123,7 +123,7 @@ class Sensor:
 
 
         for idx, angle in enumerate(self.lidar_angles):
-            ranges[idx] = 0
+            ranges[idx] = np.inf
 
             for wall in wall_vector:
                 r, phi, min_angle, max_angle = wall
@@ -141,8 +141,10 @@ class Sensor:
                 if distance_wall < 0 or distance_wall > self.lidar_range:
                     continue
 
-                ranges[idx] = max(ranges[idx], distance_wall)
+                ranges[idx] = min(ranges[idx], distance_wall)
 
+            if ranges[idx] == np.inf:
+                ranges[idx] = 0
 
         # Vetor Perpendicular a parede
         # <(vector da parede), (vector robot e ponto a descobir)> = <(xw1-xw0, yw1-yw0), (?x - 0, ?y - 0)> = 0 <=> ?x = yw1-yw0, ?y = -(xw1-xw0)
