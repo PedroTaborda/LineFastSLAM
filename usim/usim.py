@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from time import sleep
 import time
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,12 +23,13 @@ from pygame.locals import (
 
 from .map import Map, load_map
 from .robot import Robot, RobotSettings, RobotData
-from .sensor import Sensor, SensorData
+from .sensor import Sensor
+import sensor_data.sensor_data as sd
 
 @dataclass
 class SimulationData:
     sampling_time: float
-    sensors: SensorData
+    sensors: sd.SensorData
     robot_pose: RobotData
     map: Map
 
@@ -36,9 +37,10 @@ if __name__=="__main__":
     sampling_time = 1e-3
     sensor_sampling_time = 1e-1
     simulation_time = 5
+    map_file = 'map1.map'
 
     robot = Robot(RobotSettings(), [0, 0, 0])
-    map = load_map("map1.map")
+    map = load_map(map_file)
     sensor = Sensor(robot, map)
     sensor_data = []
 
@@ -115,7 +117,19 @@ if __name__=="__main__":
 
                 # Did the user click the window close button? If so, stop the loop.
                 if event.type == QUIT:
+                    print("\n")
+                    pg.quit()
+                    files = os.listdir(sd.DEFAULT_SENSOR_DATA_DIR)
+                    num=0
+                    end='.pkl'
+                    format = lambda num: f'sim{num}.xz'
+                    while format(num) in files:
+                        num+=1
+                    sd.save_sensor_data(sd.list_to_data(sensor_data, ts=sensor_sampling_time, comment=f"Map: {map_file}"), format(num))
                     running = False
+
+            if not running:
+                break
 
             screen.fill((255, 255, 255))
             map_surf = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -138,7 +152,7 @@ if __name__=="__main__":
             turtle.fill((0, 0, 0))
             rect = turtle.get_rect()
             turtle = pg.transform.rotate(turtle, robot.data['theta'][-1])
-            print(f"Robot heading {robot.data['theta'][-1]}")
+            print(f"[theta, x, y] = [{robot.data['theta'][-1] % 360.0:06.2f}, {robot.data['x'][-1]:05.2f}, {robot.data['y'][-1]:05.2f}]", end='\r')
             surf_center = (
                 (SCREEN_WIDTH-turtle.get_width())/2,
                 (SCREEN_HEIGHT-turtle.get_height())/2

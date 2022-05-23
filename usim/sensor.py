@@ -1,6 +1,5 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from this import d
 
 import numpy as np
 
@@ -8,40 +7,33 @@ from .robot import Robot
 from .map import Map
 
 @dataclass
-class SensorData:
-    odometry: np.ndarray
-    lidar: np.ndarray
-    camera: np.ndarray
-
-default_sensor_settings = {
+class SensorSettings:
     # Sensor parameters
-    'camera_fov': 90,                       # Field of view in degrees
-    'camera_range': 25,                      # Maximum range that the camera can detect the Aruco Markers
-    'lidar_range': 3.5,                     # Range in meters
-    'lidar_angular_resolution': 360,        # Number of points in one full sweep
+    camera_fov: float = 90                      # Field of view in degrees
+    camera_range: float = 25                    # Maximum range that the camera can detect the Aruco Markers
+    lidar_range: float = 3.5                    # Range in meters
+    lidar_angular_resolution: float = 360       # Number of points in one full sweep
 
     # Sensor noise characterization
-    'lidar_range_noise_sigma': 0,           # Standard Deviation of Lidar Range Measurements
-    'lidar_angular_noise_sigma': 0,         # Standard Deviation of Lidar Angular Sweep Position
-    'odometry_angular_noise_sigma': 0,      # Standard Deviation of Odometry Angular Position
-    'odometry_cartesian_noise_sigma': 0,    # Standard Deviation of Odometry Cartesian Position
-}
+    lidar_range_noise_sigma: float = 0          # Standard Deviation of Lidar Range Measurements
+    lidar_angular_noise_sigma: float = 0        # Standard Deviation of Lidar Angular Sweep Position
+    odometry_angular_noise_sigma: float = 0     # Standard Deviation of Odometry Angular Position
+    odometry_cartesian_noise_sigma: float = 0   # Standard Deviation of Odometry Cartesian Position
 
 class Sensor:
-    def __init__(self, robot: Robot, map: Map, sensor_parameters: dict = default_sensor_settings) -> None:
+    def __init__(self, robot: Robot, map: Map, sensor_parameters: SensorSettings = SensorSettings()) -> None:
         self.robot = robot
         self.map: Map = map
 
-        self.camera_fov = sensor_parameters['camera_fov']
-        self.camera_range = sensor_parameters['camera_range']
-        self.lidar_range = sensor_parameters['lidar_range']
-        self.lidar_angular_resolution = sensor_parameters['lidar_angular_resolution']
-        
-        self.lidar_range_noise_sigma = sensor_parameters['lidar_range_noise_sigma']
-        self.lidar_angular_noise_sigma = sensor_parameters['lidar_angular_noise_sigma']
-        self.odometry_angular_noise_sigma = sensor_parameters['odometry_angular_noise_sigma']
-        self.odometry_cartesian_noise_sigma = sensor_parameters['odometry_cartesian_noise_sigma']
+        self.camera_fov = sensor_parameters.camera_fov
+        self.camera_range = sensor_parameters.camera_range
+        self.lidar_range = sensor_parameters.lidar_range
+        self.lidar_angular_resolution = sensor_parameters.lidar_angular_resolution
 
+        self.lidar_range_noise_sigma = sensor_parameters.lidar_range_noise_sigma
+        self.lidar_angular_noise_sigma = sensor_parameters.lidar_angular_noise_sigma
+        self.odometry_angular_noise_sigma = sensor_parameters.odometry_angular_noise_sigma
+        self.odometry_cartesian_noise_sigma = sensor_parameters.odometry_cartesian_noise_sigma
 
         self.lidar_angles = np.linspace(0.0, 360.0, num=self.lidar_angular_resolution, endpoint=False)
 
@@ -80,7 +72,7 @@ class Sensor:
             is_in_range = np.linalg.norm(landmark_relative_position) < self.camera_range
             if is_in_fov and is_in_range:
                 observed_landmarks += [(landmark_id, landmark_relative_angle)]
-                
+        
         return observed_landmarks
         
     def lidar_measurements(self, robot_state: np.ndarray):
