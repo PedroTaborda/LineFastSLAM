@@ -25,9 +25,7 @@ def load_map(map_file: os.PathLike):
     landmarks = {}
     with open(map_file, 'r') as map_file:
         for idx, line in enumerate(map_file):
-            print(line)
             instruction = shlex.split(line, comments=True)
-            print(instruction)
             if not instruction:
                 continue
             cmd, *args = instruction
