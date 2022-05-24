@@ -50,7 +50,7 @@ def detect_landmarks(image: np.ndarray) -> list[tuple[int, float]]:
     degree_per_px = fov / image.shape[1]
     degrees_of_px = lambda px: - degree_per_px * (px - image.shape[1] / 2)
     for cornerset in corners:
-        mean_horizontal_px = np.mean(cornerset[:, 0])
+        mean_horizontal_px = np.mean(cornerset[:, :, 0])
         angle = degrees_of_px(mean_horizontal_px)
         angles.append(angle)
     return list(zip(angles, [id[0] for id in ids]))
@@ -126,6 +126,18 @@ def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
         cam[i] = cam_ros[i_cam][0]
     return SensorData(ts=ts*1e-9, odometry=odom, lidar=laser, camera=cam, comment='From rosbag', from_rosbag=True)
 
+def rosbag_to_imgs(rosbag_path: os.PathLike) -> list[np.ndarray]:
+    with rosbags.rosbag1.Reader(rosbag_path) as reader:
+        connections_cam = []
+        for x in reader.connections:
+            if x.topic == '/raspicam_node/image/compressed':
+                connections_cam.append(x)
+        imgs = []
+        for connection, timestamp, rawdata in reader.messages(connections=connections_cam):
+            msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
+            img = cv2.imdecode(msg.data, cv2.IMREAD_COLOR)
+            imgs.append(img)
+    return imgs
 
 def list_to_data(sensor_data_lst: list[tuple[np.ndarray, list[tuple[int, float]], np.ndarray]], ts: float, comment: str = '') -> SensorData:
     odom: np.ndarray = np.array([sensor_data_lst_elem[0] for sensor_data_lst_elem in sensor_data_lst])
