@@ -1,3 +1,6 @@
+# data (such as saved SensorData objects)
+data/
+
 # videos and image folder
 images/
 *.mp4

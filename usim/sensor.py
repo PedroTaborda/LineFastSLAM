@@ -9,7 +9,7 @@ from .map import Map
 @dataclass
 class SensorSettings:
     # Sensor parameters
-    camera_fov: float = 90                      # Field of view in degrees
+    camera_fov: float = 62.2                    # Field of view in degrees
     camera_range: float = 25                    # Maximum range that the camera can detect the Aruco Markers
     lidar_range: float = 3.5                    # Range in meters
     lidar_angular_resolution: float = 360       # Number of points in one full sweep
