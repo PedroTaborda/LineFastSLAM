@@ -5,6 +5,7 @@ import lzma
 from dataclasses import dataclass, asdict
 
 import numpy as np
+from scipy.optimize import least_squares
 import cv2
 
 import rosbags.rosbag1
@@ -23,6 +24,7 @@ class SensorData:
     odometry: np.ndarray        # [theta, x, y]
     lidar: np.ndarray
     camera: list[list[tuple[int, float]]]
+    camera_matrix: np.ndarray
     comment: str = ''
     from_rosbag: bool = False
 
@@ -39,21 +41,52 @@ def save_sensor_data(sensor_data: SensorData, filename: str, dir: os.PathLike=DE
         pickle.dump(data_dict, f)
 
 
-def detect_landmarks(image: np.ndarray) -> list[tuple[int, float]]:
+def detect_landmarks(image: np.ndarray, camera_matrix: np.ndarray, distortion_coefficents) -> list[tuple[int, float]]:
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250)
     parameters = cv2.aruco.DetectorParameters_create()
     corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(image, aruco_dict, parameters=parameters)
     if ids is None:
-        return []
-    fov = 62.2
+        return (image, [])
+    #fov = 2*62.2
     angles = []
-    degree_per_px = fov / image.shape[1]
-    degrees_of_px = lambda px: - degree_per_px * (px - image.shape[1] / 2)
+    distances = []
+    #degree_per_px = fov / image.shape[1]
+    #degrees_of_px = lambda px: - degree_per_px * (px - image.shape[1] / 2)
     for cornerset in corners:
-        mean_horizontal_px = np.mean(cornerset[:, :, 0])
+        '''cornersettemp = cornerset
+        cornerset = cornerset.squeeze()
+        mean_horizontal_px = np.mean(cornerset[:, 0])
         angle = degrees_of_px(mean_horizontal_px)
+        angles.append(angle)'''
+
+        LA  = 0.083
+        _, translation, _ = cv2.aruco.estimatePoseSingleMarkers(cornerset, LA, camera_matrix, distortion_coefficents)
+        translation = translation.squeeze()
+
+        distance = np.linalg.norm(translation)
+        angle = np.rad2deg(np.arctan(-translation[0]/translation[2]))
         angles.append(angle)
-    return list(zip(angles, [id[0] for id in ids]))
+        distances.append(distance)
+
+        corners = cornerset.reshape((4, 2))
+        (topLeft, topRight, bottomRight, bottomLeft) = corners
+		# convert each of the (x, y)-coordinate pairs to integers
+        topRight = (int(topRight[0]), int(topRight[1]))
+        bottomRight = (int(bottomRight[0]), int(bottomRight[1]))
+        bottomLeft = (int(bottomLeft[0]), int(bottomLeft[1]))
+        topLeft = (int(topLeft[0]), int(topLeft[1]))
+
+        cv2.line(image, topLeft, topRight, (0, 255, 0), 2)
+        cv2.line(image, topRight, bottomRight, (0, 255, 0), 2)
+        cv2.line(image, bottomRight, bottomLeft, (0, 255, 0), 2)
+        cv2.line(image, bottomLeft, topLeft, (0, 255, 0), 2)
+
+        cv2.putText(image, f'd: {distance:.3f}', (topLeft[0] - 50, topLeft[1] - 30), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (0, 255, 0), 2)
+        cv2.putText(image, f'angle: {angle:.1f}', (topLeft[0] - 50, topLeft[1] - 15), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (0, 255, 0), 2)
+
+    return (image, list(zip(angles, distances, [id[0] for id in ids])))
 
 
 def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
@@ -61,11 +94,14 @@ def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
     odom_ros = []
     cam_ros_sim = []
     cam_ros_real = []
+    camera_matrix = np.empty((3,3))
+    distortion_coefficients = np.empty((5,))
     with rosbags.rosbag1.Reader(rosbag_path) as reader:
         connections_laser = []
         connections_odom = []
         connections_cam_sim = []
         connections_cam = []
+        connections_cam_info = []
         for x in reader.connections:
             if x.topic == '/scan':
                 connections_laser.append(x)
@@ -75,6 +111,8 @@ def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
                 connections_cam_sim.append(x)
             elif x.topic == '/raspicam_node/image/compressed':
                 connections_cam.append(x)
+            elif x.topic == '/raspicam_node/camera_info':
+                connections_cam_info.append(x)
         if len(connections_laser) != 0:
             for connection, timestamp, rawdata in reader.messages(connections=connections_laser):
                 msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
@@ -89,12 +127,18 @@ def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
             for connection, timestamp, rawdata in reader.messages(connections=connections_cam_sim):
                 msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
                 cam_ros_sim.append((detect_landmarks(msg), timestamp))
+        if len(connections_cam_info) != 0:
+            for connection, timestamp, rawdata in reader.messages(connections=connections_cam_info):
+                msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
+                camera_matrix = msg.k.reshape((3,3))
+                distortion_coefficients = msg.d
         if len(connections_cam) != 0:
             for connection, timestamp, rawdata in reader.messages(connections=connections_cam):
                 msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
                 img = cv2.imdecode(msg.data, cv2.IMREAD_COLOR)
-                landmarks = detect_landmarks(img)
+                image, landmarks = detect_landmarks(img, camera_matrix, distortion_coefficients)
                 cam_ros_real.append((landmarks, timestamp))
+
     cam_ros = cam_ros_real if cam_ros_real else cam_ros_sim
     laser_times_ns: list[int] = np.array([x[1] for x in laser_ros])
     odom_times_ns: list[int] = np.array([x[1] for x in odom_ros])
@@ -124,7 +168,7 @@ def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
         odom[i] = odom_ros[i_odom][0]
         laser[i] = laser_ros[i_laser][0]
         cam[i] = cam_ros[i_cam][0]
-    return SensorData(ts=ts*1e-9, odometry=odom, lidar=laser, camera=cam, comment='From rosbag', from_rosbag=True)
+    return SensorData(ts=ts*1e-9, odometry=odom, lidar=laser, camera=cam, camera_matrix=camera_matrix, comment='From rosbag', from_rosbag=True)
 
 def rosbag_to_imgs(rosbag_path: os.PathLike) -> list[np.ndarray]:
     with rosbags.rosbag1.Reader(rosbag_path) as reader:
@@ -138,6 +182,20 @@ def rosbag_to_imgs(rosbag_path: os.PathLike) -> list[np.ndarray]:
             img = cv2.imdecode(msg.data, cv2.IMREAD_COLOR)
             imgs.append(img)
     return imgs
+
+def rosbag_camera_info(rosbag_path: os.PathLike) -> list[np.ndarray]:
+    with rosbags.rosbag1.Reader(rosbag_path) as reader:
+        connections_cam_info = []
+        for x in reader.connections:
+            if x.topic == '/raspicam_node/camera_info':
+                connections_cam_info.append(x)
+        camera_matrix = np.empty((3,3))
+        distortion_coefficients = np.empty((5,))
+        for connection, timestamp, rawdata in reader.messages(connections=connections_cam_info):
+            msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
+            camera_matrix = msg.k.reshape((3,3))
+            distortion_coefficients = msg.d
+    return (camera_matrix, distortion_coefficients)
 
 def list_to_data(sensor_data_lst: list[tuple[np.ndarray, list[tuple[int, float]], np.ndarray]], ts: float, comment: str = '') -> SensorData:
     odom: np.ndarray = np.array([sensor_data_lst_elem[0] for sensor_data_lst_elem in sensor_data_lst])
