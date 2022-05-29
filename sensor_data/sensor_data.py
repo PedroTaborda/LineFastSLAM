@@ -20,11 +20,9 @@ if not os.path.isdir(DEFAULT_SENSOR_DATA_DIR):
 
 @dataclass
 class SensorData:
-    ts: np.ndarray
-    odometry: np.ndarray        # [theta, x, y]
-    lidar: np.ndarray
-    camera: list[list[tuple[int, float]]]
-    camera_matrix: np.ndarray
+    odometry: list[tuple[int, np.ndarray]]        # (timestamp, [theta, x, y])
+    lidar: list[tuple[int, np.ndarray]]           # (timestamp, [phi, r])
+    camera: list[tuple[int, list[tuple[int, np.ndarray]]]]           # (timestamp, list[id, [phi, r]])
     comment: str = ''
     from_rosbag: bool = False
 
@@ -47,27 +45,23 @@ def detect_landmarks(image: np.ndarray, camera_matrix: np.ndarray, distortion_co
     corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(image, aruco_dict, parameters=parameters)
     if ids is None:
         return (image, [])
-    #fov = 2*62.2
+
     angles = []
     distances = []
-    #degree_per_px = fov / image.shape[1]
-    #degrees_of_px = lambda px: - degree_per_px * (px - image.shape[1] / 2)
     for cornerset in corners:
-        '''cornersettemp = cornerset
-        cornerset = cornerset.squeeze()
-        mean_horizontal_px = np.mean(cornerset[:, 0])
-        angle = degrees_of_px(mean_horizontal_px)
-        angles.append(angle)'''
+        LA  = 0.083     # Physical size of the aruco markers. Should be an input parameter
 
-        LA  = 0.083
+        # Estimate the position of the aruco markers in world coordinates
         _, translation, _ = cv2.aruco.estimatePoseSingleMarkers(cornerset, LA, camera_matrix, distortion_coefficents)
         translation = translation.squeeze()
 
+        # Use the position of the markers to get the distance and difference in heading to the robot
         distance = np.linalg.norm(translation)
         angle = np.rad2deg(np.arctan(-translation[0]/translation[2]))
         angles.append(angle)
         distances.append(distance)
 
+        # Draw the aruco markers on the image
         corners = cornerset.reshape((4, 2))
         (topLeft, topRight, bottomRight, bottomLeft) = corners
 		# convert each of the (x, y)-coordinate pairs to integers
@@ -116,12 +110,12 @@ def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
         if len(connections_laser) != 0:
             for connection, timestamp, rawdata in reader.messages(connections=connections_laser):
                 msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
-                laser_ros.append((msg.ranges, timestamp))
+                laser_ros.append((timestamp, msg.ranges))
         if len(connections_odom) != 0:
             for connection, timestamp, rawdata in reader.messages(connections=connections_odom):
                 msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
                 theta, x, y = msg.pose.pose.orientation.z*180.0/np.pi, msg.pose.pose.position.x, msg.pose.pose.position.y
-                odom_ros.append(((theta, x, y), timestamp))
+                odom_ros.append((timestamp, np.array([theta, x, y])))
         if len(connections_cam_sim) != 0:
             raise NotImplementedError('Camera on simulation not implemented')
             for connection, timestamp, rawdata in reader.messages(connections=connections_cam_sim):
@@ -136,9 +130,10 @@ def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
             for connection, timestamp, rawdata in reader.messages(connections=connections_cam):
                 msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
                 img = cv2.imdecode(msg.data, cv2.IMREAD_COLOR)
-                image, landmarks = detect_landmarks(img, camera_matrix, distortion_coefficients)
-                cam_ros_real.append((landmarks, timestamp))
+                _, landmarks = detect_landmarks(img, camera_matrix, distortion_coefficients)
+                cam_ros_real.append((timestamp, landmarks))
 
+    return SensorData(odometry=odom_ros, lidar=laser_ros, camera=cam_ros_real, comment='From rosbag', from_rosbag=True)
     cam_ros = cam_ros_real if cam_ros_real else cam_ros_sim
     laser_times_ns: list[int] = np.array([x[1] for x in laser_ros])
     odom_times_ns: list[int] = np.array([x[1] for x in odom_ros])

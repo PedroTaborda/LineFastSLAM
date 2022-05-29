@@ -37,7 +37,7 @@ class Sensor:
 
         self.lidar_angles = np.linspace(0.0, 360.0, num=self.lidar_angular_resolution, endpoint=False)
 
-    def sample_sensors(self) -> tuple[np.ndarray, list[tuple[int, float]], np.ndarray]:
+    def sample_sensors(self) -> tuple[np.ndarray, list[tuple[int, np.ndarray]], np.ndarray]:
         robot_state = np.array([self.robot.data['theta'][-1], self.robot.data['x'][-1],
                        self.robot.data['y'][-1]])
 
@@ -55,7 +55,7 @@ class Sensor:
 
         return np.array([measured_angle, measured_x, measured_y])
 
-    def camera_measurements(self, robot_state: np.ndarray) -> list[tuple[int, float]]:
+    def camera_measurements(self, robot_state: np.ndarray) -> list[tuple[int, np.ndarray]]:
         observed_landmarks = []
 
         robot_position = np.array([robot_state[1], robot_state[2]])
@@ -66,16 +66,17 @@ class Sensor:
             # Offset the landmark to the robot's coordinate frame
             landmark_relative_position = landmark_position - robot_position
             landmark_relative_angle = np.rad2deg(np.arctan2(landmark_relative_position[1], landmark_relative_position[0])) - robot_heading
+            landmark_relative_distance = np.linalg.norm(landmark_relative_position)
 
             # Determines if the landmark is in the camera's field of view and range
             is_in_fov = landmark_relative_angle > - self.camera_fov / 2 and landmark_relative_angle < self.camera_fov / 2
-            is_in_range = np.linalg.norm(landmark_relative_position) < self.camera_range
+            is_in_range = landmark_relative_distance < self.camera_range
             if is_in_fov and is_in_range:
-                observed_landmarks += [(landmark_id, landmark_relative_angle)]
+                observed_landmarks += [(landmark_id, np.array([landmark_relative_angle, landmark_relative_distance]))]
         
         return observed_landmarks
         
-    def lidar_measurements(self, robot_state: np.ndarray):
+    def lidar_measurements(self, robot_state: np.ndarray) -> np.ndarray:
         ranges = np.zeros_like(self.lidar_angles)
         theta, x, y = robot_state
 
