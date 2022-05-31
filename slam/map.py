@@ -9,23 +9,28 @@ from matplotlib.patches import Ellipse
 
 from ekf.ekf import EKF, EKFSettings
 
+
+r = 0.2  # How much to "trust" measurements
+
 print(f"[WARNING] Unrealistic landmarks.")
 @dataclass
 class LandmarkSettings(EKFSettings):
     """Settings for the EKF representing a landmark.
     
     A landmark is represented by its position in the xy plane.
+    By default, there is a linear measurement model, but this can be
+    changed by setting the `h` and `Dh_` functions at measurement time.
     """
+    cov0: np.ndarray = np.diag([0.1, 0.1]) # also wrong but enough for now
     g: callable = lambda x, u, m: x
     Dgx: callable = lambda x, u, m: np.eye(2)
     Dgm: callable = lambda x, u, m: np.zeros((2, 2))
-    h: callable = lambda x, n: x # this is wrong, but is enough for preliminary testing
+    h: callable = lambda x, n: x + r * np.eye(2) @ n
     Dhx: callable = lambda x, n: np.eye(2)
-    Dhn: callable = lambda x, n: np.eye(2)
-    cov0: np.ndarray = np.diag([0.1, 0.1]) # also wrong but enough for now
+    Dhn: callable = lambda x, n: r * np.eye(2)
 
 class Landmark(EKF):
-    def __init__(self, settings: LandmarkSettings): # just for type hinting
+    def __init__(self, settings: LandmarkSettings):
         super().__init__(settings)
         self.drawn = False
         self.confidence_interval = 0.99 # draw ellipse for this confidence interval
@@ -163,7 +168,8 @@ if __name__ == '__main__':
     ax.set_xlim(-0.5, 1.5)
     ax.set_ylim(-0.5, 1.5)
     for i, pose in enumerate(poses):
-        map.update(pose, (0, np.array([0.5, 0.5])))
+        # make an observation with noise
+        map.update(pose, (0, np.array([0.5, 0.5]) + np.random.randn(2) * 0.1))
         map._draw(ax)
         plt.pause(0.3)
 
