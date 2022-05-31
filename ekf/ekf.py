@@ -10,14 +10,14 @@ class EKFSettings:
     """
     Settings for the EKF.
     """
+    mu0: np.ndarray     # Initial expected value for x
+    cov0: np.ndarray    # Initial covariance matrix for x
     g: callable         # g
     Dgx: callable       # Jacobian of g with regard to x
     Dgm: callable       # Jacobian of g with regard to m
     h: callable         # h
     Dhx: callable       # Jacobian of h with regard to x
     Dhn: callable       # Jacobian of h with regard to n
-    mu0: np.ndarray     # Initial expected value for x
-    cov0: np.ndarray    # Initial covariance matrix for x
 
 
 # print(f"[WARNING] EKF code does not behave as EKF.")
