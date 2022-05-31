@@ -101,7 +101,7 @@ if __name__ == "__main__":
     ax.add_patch(est_ellipse)
     p_handle: PathCollection = ax.scatter(0, 0, marker='x', c='C01')
     z_handle: PathCollection = ax.scatter(0, 0, marker='1', c='C02')
-    L = 20
+    L = 30
     ax.set_xlim([-L, L])
     ax.set_ylim([-L, L])
     # ax.axis('equal')
