@@ -90,7 +90,12 @@ class FastSLAM:
 
         for idx, particle in enumerate(self.particles):
             self.particle_markers[idx] = self.ax.plot(0, 0, c='C00')[0]
+        
+        self.ax.set_autoscale_on(True)
+        self.ax.axes.set_aspect('equal')
 
+        x = 6
+        self.ax.plot([-x, x, x, -x], [-x, -x, x, x], c='k', linewidth=0)
     
     def _draw_location(self, actual_location: np.ndarray = None) -> None:
         for idx, particle in enumerate(self.particles):
@@ -108,9 +113,7 @@ class FastSLAM:
 
     def _draw(self) -> None:
         self.ax.relim()
-        self.ax.autoscale_view()
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
+        self.ax.autoscale_view(False,True,True)
         plt.pause(0.01)
         plt.show(block=False)
 
