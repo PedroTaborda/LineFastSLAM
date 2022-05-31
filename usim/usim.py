@@ -161,7 +161,6 @@ if __name__=="__main__":
 
     files = os.listdir(sd.DEFAULT_SENSOR_DATA_DIR)
     num=0
-    end='.pkl'
     format = lambda num: f'sim{num}.xz'
     while format(num) in files:
         num+=1

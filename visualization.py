@@ -42,29 +42,3 @@ if __name__=="__main__":
             fig.savefig(os.path.join(save_dir, f'{idx:05d}.png'))
 
     to_video(save_dir)
-
-    '''
-    plt.ion()
-    
-    for i in range(len(data.lidar)):
-        plt.figure(0)
-        plt.clf()
-        point_x = []
-        point_y = []
-        point_color = []
-        for angle, point in enumerate(data.lidar[i]):
-            point_x += [point*np.cos(np.deg2rad(angle + 90))]
-            point_y += [point*np.sin(np.deg2rad(angle + 90))]
-            point_color += [point]
-
-        plt.scatter(point_x, point_y, c=point_color)
-        plt.xlim((-3.5, 3.5))
-        plt.ylim((-3.5, 3.5))
-
-        plt.figure(1)
-        plt.clf()
-        plt.imshow(imgs[i])
-
-        plt.show()
-        plt.pause(0.001)
-    '''

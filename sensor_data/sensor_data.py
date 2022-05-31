@@ -26,6 +26,14 @@ class SensorData:
     comment: str = ''
     from_rosbag: bool = False
 
+    def save(self, filename: str) -> None:
+        """Save the sensor data to a file.
+
+        Args:
+            filename: The filename to save the data to.
+        """
+        save_sensor_data(self, filename)
+
 
 def load_sensor_data(filename: str, dir: os.PathLike=DEFAULT_SENSOR_DATA_DIR) -> SensorData:
     with lzma.open(os.path.join(dir, filename), 'rb') as f:
@@ -134,36 +142,6 @@ def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
                 cam_ros_real.append((timestamp, landmarks))
 
     return SensorData(odometry=odom_ros, lidar=laser_ros, camera=cam_ros_real, comment='From rosbag', from_rosbag=True)
-    cam_ros = cam_ros_real if cam_ros_real else cam_ros_sim
-    laser_times_ns: list[int] = np.array([x[1] for x in laser_ros])
-    odom_times_ns: list[int] = np.array([x[1] for x in odom_ros])
-    cam_ros_times_ns: list[int] = np.array([x[1] for x in cam_ros])
-    times = [
-        laser_times_ns,
-        odom_times_ns,
-        cam_ros_times_ns,
-    ]
-    sample_times_approx = [
-        np.mean(np.diff(laser_times_ns)) if len(laser_ros) != 0 else np.inf,
-        np.mean(np.diff(odom_times_ns)) if len(odom_ros) != 0 else np.inf,
-        np.mean(np.diff(cam_ros_times_ns)) if len(cam_ros) != 0 else np.inf,
-    ]
-    ts = np.min(sample_times_approx)
-    t0 = times[np.argmin(sample_times_approx)][0]
-    tf = times[np.argmin(sample_times_approx)][-1]
-    N = int((tf - t0) / ts)
-    odom = np.zeros((N, 3))
-    laser = np.zeros((N, 360))
-    cam = np.zeros((N,), dtype=object)
-    for i in range(N):
-        t = t0 + ts*i
-        i_odom = np.argmin(np.abs(odom_times_ns - t))
-        i_laser = np.argmin(np.abs(laser_times_ns - t))
-        i_cam = np.argmin(np.abs(cam_ros_times_ns - t))
-        odom[i] = odom_ros[i_odom][0]
-        laser[i] = laser_ros[i_laser][0]
-        cam[i] = cam_ros[i_cam][0]
-    return SensorData(ts=ts*1e-9, odometry=odom, lidar=laser, camera=cam, camera_matrix=camera_matrix, comment='From rosbag', from_rosbag=True)
 
 def rosbag_to_imgs(rosbag_path: os.PathLike) -> list[np.ndarray]:
     with rosbags.rosbag1.Reader(rosbag_path) as reader:
@@ -214,3 +192,19 @@ def add_comment(comment: str, filename: str, dir: os.PathLike=DEFAULT_SENSOR_DAT
 
     with lzma.open(os.path.join(dir, filename), 'wb') as f:
         pickle.dump(data_dict, f)
+
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Convert sensor data from rosbag to sensor data')
+    parser.add_argument('--rosbag', type=str, help='Path to rosbag file', required=True)
+
+    args = parser.parse_args()
+
+    if args.rosbag:
+        sensor_data = rosbag_to_data(args.rosbag)
+        lst = args.rosbag.split('.')
+        lst[-1] = lst[-1].replace('bag', 'xz', 1)
+        sensor_data.save('.'.join(lst))
+        print('Saved to', '.'.join(lst))
