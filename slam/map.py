@@ -21,6 +21,7 @@ class LandmarkSettings(EKFSettings):
     By default, there is a linear measurement model, but this can be
     changed by setting the `h` and `Dh_` functions at measurement time.
     """
+    mu0: np.ndarray = np.array([0, 0])
     cov0: np.ndarray = np.diag([0.1, 0.1]) # also wrong but enough for now
     g: callable = lambda x, u, m: x
     Dgx: callable = lambda x, u, m: np.eye(2)
@@ -30,7 +31,8 @@ class LandmarkSettings(EKFSettings):
     Dhn: callable = lambda x, n: r * np.eye(2)
 
 class Landmark(EKF):
-    def __init__(self, settings: LandmarkSettings):
+    def __init__(self, settings: LandmarkSettings, mu0: np.ndarray):
+        settings.mu0 = mu0
         super().__init__(settings)
         self.drawn = False
         self.confidence_interval = 0.99 # draw ellipse for this confidence interval
@@ -43,7 +45,7 @@ class Landmark(EKF):
         super().update(z)
         self.latest_z = z
         
-    def _draw(self, ax):
+    def _draw(self, ax, color_ellipse='C00', color_p='C01', color_z='C02'):
         """Draw the landmark on the given matplotlib axis.
 
         This drawing includes an ellipse which is the level curve of the
@@ -57,10 +59,10 @@ class Landmark(EKF):
         z = self.latest_z
         if not self.drawn:
             self.drawn = True    
-            self.std_ellipse: Ellipse = Ellipse((0, 0), 1, 1, facecolor='none', edgecolor='C00')
+            self.std_ellipse: Ellipse = Ellipse((0, 0), 1, 1, facecolor='none', edgecolor=color_ellipse)
             ax.add_patch(self.std_ellipse)
-            self.p_handle: PathCollection = ax.scatter(p[0], p[1], marker='x', c='C01')
-            self.z_handle: PathCollection = ax.scatter(z[0], z[1], marker='1', c='C02')
+            self.p_handle: PathCollection = ax.scatter(p[0], p[1], marker='x', c=color_p)
+            self.z_handle: PathCollection = ax.scatter(z[0], z[1], marker='1', c=color_z)
 
         # number of std's to include in confidence ellipse
         n_stds = -scipy.stats.norm.ppf((1-self.confidence_interval)/2)
@@ -94,7 +96,8 @@ class Map:
         landmark_id, landmark_position = observation
         if landmark_id not in self.landmarks:
             self.landmarks[landmark_id] = Landmark(
-                LandmarkSettings(mu0=landmark_position)
+                LandmarkSettings(),
+                mu0=landmark_position
             )
             return 1.0
         else:
@@ -103,9 +106,9 @@ class Map:
             self.landmarks[landmark_id].update(landmark_position)
             return 1.0 / (np.linalg.norm(prev_loc - landmark_position) + 1)
 
-    def _draw(self, ax):
+    def _draw(self, ax, **plot_kwargs):
         for landmark in self.landmarks.values():
-            landmark._draw(ax)
+            landmark._draw(ax, **plot_kwargs)
 
     def copy(self):
         return copy.copy(self)
@@ -170,6 +173,7 @@ if __name__ == '__main__':
     for i, pose in enumerate(poses):
         # make an observation with noise
         map.update(pose, (0, np.array([0.5, 0.5]) + np.random.randn(2) * 0.1))
+        map.update(pose, (1, np.array([0.2, 0.7]) + np.random.randn(2) * 0.1))
         map._draw(ax)
         plt.pause(0.3)
 

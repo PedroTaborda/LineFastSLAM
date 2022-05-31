@@ -51,7 +51,7 @@ class Particle:
         """
         return Particle(self.map.copy(), copy.copy(self.pose), copy.copy(self.weight))
 
-    def _draw(self, line: plt.Line2D, **plot_args) -> None:
+    def _draw(self, line: plt.Line2D) -> None:
         R = np.array([[np.cos(self.pose[2]), -np.sin(self.pose[2])],
                         [np.sin(self.pose[2]), np.cos(self.pose[2])]])
         arrow = (R @ self.canonical_arrow.T)

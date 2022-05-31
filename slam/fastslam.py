@@ -6,9 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PathCollection
 
-from slam.map import Map
+from slam.map import Landmark, LandmarkSettings, Map
 from slam.action_model import ActionModelSettings, action_model
-from ekf.ekf import EKFSettings
 from slam.resampling import ResampleType
 from slam.particle import Particle
 
@@ -18,7 +17,7 @@ class FastSLAMSettings:
     """
     num_particles: int = 100
     action_model_settings: ActionModelSettings = ActionModelSettings()
-    ekf_settings: EKFSettings = EKFSettings()
+    landmark_settings: LandmarkSettings = LandmarkSettings()
     resampling_type: ResampleType = ResampleType.UNIFORM
     visualize: bool = False
 
@@ -64,7 +63,7 @@ class FastSLAM:
         """Resamples the particles based on their weights.
         """
         weights = np.array([particle.weight for particle in self.particles])
-        self.particles = self.settings.resampling_type.value(weights)
+        self.particles = self.settings.resampling_type(self.particles, weights)
 
     def get_location(self) -> np.ndarray:
         """Returns the estimated location of the robot.
@@ -85,18 +84,17 @@ class FastSLAM:
     # Visualization methods (if settings.visualize is True)
     def _init_visualizer(self, ylim: tuple=(-3, 3), xlim: tuple=(-3, 3)) -> None:
         self.fig, self.ax = plt.subplots(1, 1, figsize=(6, 6))
-        self.actual_location_dot: PathCollection = self.ax.scatter(0, 0, marker='x', c='C01')
-        self.landmark_dots: PathCollection = self.ax.scatter(0, 0, marker='^', c='C00')
+        self.actual_location_dot: PathCollection = self.ax.scatter(0, 0, marker='x', c='k')
         self.ax.set_xlim(*xlim)
         self.ax.set_ylim(*ylim)
 
         for idx, particle in enumerate(self.particles):
-            self.particle_markers[idx] = self.ax.plot(0, 0, c='C01')[0]
+            self.particle_markers[idx] = self.ax.plot(0, 0, c='C00')[0]
 
     
     def _draw_location(self, actual_location: np.ndarray = None) -> None:
         for idx, particle in enumerate(self.particles):
-            particle._draw(self.particle_markers[idx], color='C01')
+            particle._draw(self.particle_markers[idx])
         if actual_location is not None:
             self.actual_location_dot.set(offsets = [actual_location[:2]])
 
@@ -104,10 +102,8 @@ class FastSLAM:
 
     def _draw_map(self, actual_map = None) -> None:
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
-        map_estimate = self.particles[particle_idx_for_map].map.landmarks
-        landmark_positions = [map_estimate[landmark].get_mu() for landmark in map_estimate]
-        print(landmark_positions)
-        self.landmark_dots.set(offsets = landmark_positions)
+        map_estimate: Map = self.particles[particle_idx_for_map].map
+        map_estimate._draw(self.ax, color_ellipse='C01', color_p='C01', color_z='C01')
         self._draw()
 
     def _draw(self) -> None:
@@ -124,11 +120,7 @@ if __name__ == '__main__':
         num_particles=10,
         action_model_settings=ActionModelSettings(
         ),
-        ekf_settings=EKFSettings(
-            # example
-            #initial_covariance=np.diag([0.1, 0.1]),
-            #process_noise_covariance=np.diag([0.1, 0.1]),
-            #observation_noise_covariance=np.diag([0.1, 0.1]),
+        landmark_settings=LandmarkSettings(
         ),
         resampling_type=ResampleType.UNIFORM,
         visualize=True
