@@ -21,8 +21,8 @@ def plot():
     # Plot ellipse
     est_ellipse.set_center(mu)
     [w, v] = np.linalg.eig(cov)
-    est_ellipse.set_width(w[0]*n_stds)
-    est_ellipse.set_height(w[1]*n_stds)
+    est_ellipse.set_width(np.sqrt(w[0])*n_stds*2)
+    est_ellipse.set_height(np.sqrt(w[1])*n_stds*2)
     angle_deg = math.atan2(v[1, 0], v[0, 0]) * 180/np.pi
     est_ellipse.set_angle(angle_deg)
 
@@ -78,8 +78,8 @@ if __name__ == "__main__":
     # Rotation  degrees per time step
     a = 15*np.pi/180
     A = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
-    m_gain = np.identity(2)
-    n_gain = np.diag([2, 3])
+    m_gain = np.array([[0.9, 1.2], [1.2, 0.3]])
+    n_gain = np.diag([1, 4])
 
     def g(x, u, m):
         # print(m)
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     ax.add_patch(est_ellipse)
     p_handle: PathCollection = ax.scatter(0, 0, marker='x', c='C01')
     z_handle: PathCollection = ax.scatter(0, 0, marker='1', c='C02')
-    L = 30
+    L = 20
     ax.set_xlim([-L, L])
     ax.set_ylim([-L, L])
     # ax.axis('equal')
