@@ -8,7 +8,7 @@ from matplotlib.collections import PathCollection
 
 from slam.map import Map
 from slam.action_model import ActionModelSettings, action_model
-from slam.ekf import EKFSettings
+from ekf.ekf import EKFSettings
 from slam.resampling import ResampleType
 from slam.particle import Particle
 
@@ -105,7 +105,7 @@ class FastSLAM:
     def _draw_map(self, actual_map = None) -> None:
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
         map_estimate = self.particles[particle_idx_for_map].map.landmarks
-        landmark_positions = [map_estimate[landmark].get_position() for landmark in map_estimate]
+        landmark_positions = [map_estimate[landmark].get_mu() for landmark in map_estimate]
         print(landmark_positions)
         self.landmark_dots.set(offsets = landmark_positions)
         self._draw()
