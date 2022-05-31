@@ -64,11 +64,19 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             slammer.resample()
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--not-realtime", action="store_true")
+    parser.add_argument("--no-visualize", action="store_true")
+    parser.add_argument("--file", type=str, default='camera-unmeasured.xz')
+    
+    args = parser.parse_args()
+
     slam_sensor_data(
-        sd.load_sensor_data('camera-unmeasured.xz'), 
+        sd.load_sensor_data(args.file),
         slam_settings=fs.FastSLAMSettings(
             num_particles=10,
-            visualize=True
+            visualize=not args.no_visualize
         ),
-        realtime=True
+        realtime=not args.not_realtime
     )
