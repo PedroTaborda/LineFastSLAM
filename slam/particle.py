@@ -49,7 +49,7 @@ class Particle:
     def copy(self) -> Particle:
         """Copy the particle, creating a new particle sharing the same map.
         """
-        return Particle(self.map, copy.copy(self.pose), copy.copy(self.weight))
+        return Particle(self.map.copy(), copy.copy(self.pose), copy.copy(self.weight))
 
     def _draw(self, line: plt.Line2D, **plot_args) -> None:
         R = np.array([[np.cos(self.pose[2]), -np.sin(self.pose[2])],
