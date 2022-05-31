@@ -68,6 +68,9 @@ class Sensor:
             landmark_relative_angle = np.rad2deg(np.arctan2(landmark_relative_position[1], landmark_relative_position[0])) - robot_heading
             landmark_relative_distance = np.linalg.norm(landmark_relative_position)
 
+            landmark_relative_angle = landmark_relative_angle + 360 if landmark_relative_angle < -180 else landmark_relative_angle
+            landmark_relative_angle = landmark_relative_angle - 360 if landmark_relative_angle > 180 else landmark_relative_angle
+
             # Determines if the landmark is in the camera's field of view and range
             is_in_fov = landmark_relative_angle > - self.camera_fov / 2 and landmark_relative_angle < self.camera_fov / 2
             is_in_range = landmark_relative_distance < self.camera_range
@@ -109,36 +112,44 @@ class Sensor:
             xi = - orthogonal_direction[0] / (np.linalg.norm(orthogonal_direction) ** 2) * c
             yi = - orthogonal_direction[1] / (np.linalg.norm(orthogonal_direction) ** 2) * c
 
-            angle_0 = np.arctan2(yw0, xw0)
-            angle_1 = np.arctan2(yw1, xw1)
+            angle_0 = np.arctan2(yw0, xw0) - np.arctan2(yi, xi)
+            angle_1 = np.arctan2(yw1, xw1) - np.arctan2(yi, xi)
+
+            angle_0 = angle_0 + 2*np.pi if angle_0 < -np.pi else angle_0
+            angle_1 = angle_1 + 2*np.pi if angle_1 < -np.pi else angle_1
+
+            angle_0 = angle_0 - 2*np.pi if angle_0 > np.pi else angle_0
+            angle_1 = angle_1 - 2*np.pi if angle_1 > np.pi else angle_1
 
             wall_vector += [(np.linalg.norm(np.array([xi, yi])), np.arctan2(yi, xi), \
                              min(angle_0, angle_1), max(angle_0, angle_1))]
 
 
         for idx, angle in enumerate(self.lidar_angles):
+            lidar_angle = np.deg2rad(angle + theta)
             ranges[idx] = np.inf
 
             for wall in wall_vector:
                 r, phi, min_angle, max_angle = wall
-                lidar_angle = (np.deg2rad(angle + theta) + np.pi) % (2 * np.pi) - np.pi
+                angle_to_orthogonal = lidar_angle - phi
 
-                if lidar_angle < min_angle or lidar_angle > max_angle:
+                angle_to_orthogonal = angle_to_orthogonal + 2*np.pi if angle_to_orthogonal < -np.pi else angle_to_orthogonal
+                angle_to_orthogonal = angle_to_orthogonal - 2*np.pi if angle_to_orthogonal > np.pi else angle_to_orthogonal
+
+                if angle_to_orthogonal < min_angle or angle_to_orthogonal > max_angle:
                     continue
 
-                angle_to_orthogonal = np.rad2deg(phi - lidar_angle)
-                if (angle_to_orthogonal < -89 and angle_to_orthogonal > -91 ) or \
-                   (angle_to_orthogonal > 89 and angle_to_orthogonal < 91):
+                if np.cos(angle_to_orthogonal) == 0:
                     continue
 
-                distance_wall = r / np.cos(np.deg2rad(angle_to_orthogonal))
+                distance_wall = r / np.cos(angle_to_orthogonal)
                 if distance_wall < 0 or distance_wall > self.lidar_range:
                     continue
 
                 ranges[idx] = min(ranges[idx], distance_wall)
 
             if ranges[idx] == np.inf:
-                ranges[idx] = 0
+                ranges[idx] = 3.5
 
         # Vetor Perpendicular a parede
         # <(vector da parede), (vector robot e ponto a descobir)> = <(xw1-xw0, yw1-yw0), (?x - 0, ?y - 0)> = 0 <=> ?x = yw1-yw0, ?y = -(xw1-xw0)
