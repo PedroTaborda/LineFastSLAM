@@ -150,15 +150,5 @@ class Sensor:
 
             if ranges[idx] == np.inf:
                 ranges[idx] = 3.5
-
-        # Vetor Perpendicular a parede
-        # <(vector da parede), (vector robot e ponto a descobir)> = <(xw1-xw0, yw1-yw0), (?x - 0, ?y - 0)> = 0 <=> ?x = yw1-yw0, ?y = -(xw1-xw0)
-
-        # Para descobrir a interseptação entre o vetor perpendicular e a parede
-        # 
         
-        return ranges
-
-
-            
-        
+        return ranges 

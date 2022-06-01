@@ -119,6 +119,6 @@ def view_sensor_data(sensor_data: SensorData, fig_num: int = 1) -> SensorDataVie
 
 
 if __name__=='__main__':
-    data = load_sensor_data('sim13.xz')
+    data = load_sensor_data('sim14.xz')
     viewer = view_sensor_data(data)
     viewer.show()

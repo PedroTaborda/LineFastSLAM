@@ -1,6 +1,7 @@
 import time
 
 import numpy as np
+from slam.action_model import ActionModelSettings
 
 import slam.fastslam as fs
 import sensor_data.sensor_data as sd
@@ -42,21 +43,21 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             print(data.camera[j][0]/1e9, "camera")
             print(f"camera data: {data.camera[j][1]}")
             for obs in data.camera[j][1]:
-                theta, r, id = obs
-                pos_r = np.array([r*np.cos(theta), r*np.sin(theta)])
+                id, landmark = obs
+                theta, r = landmark
                 xr, yr, tr = slammer.get_location()
-                c, s = np.cos(tr), np.sin(tr)
-                xabs, yabs = np.array(((c, s), (-s, c))) @ pos_r + np.array((xr, yr))
-                xy_observation = np.array([xabs, yabs])
+                xy_observation = np.array([xr + r*np.cos(np.deg2rad(theta + tr)),
+                                       yr + r*np.sin(np.deg2rad(theta + tr))])
+                print(f'Landmark position {xy_observation}')
                 slammer.make_observation((id, xy_observation))
         elif it == 2:
             k += 1
             print(data.odometry[k][0]/1e9, "odometry")
             #print(f"odometry data: {data.odometry[k][1]}")
-            x0, y0, theta0 = data.odometry[-k][1]
-            x1, y1, theta1 = data.odometry[k][1]
+            theta0, x0, y0 = data.odometry[k-1][1]
+            theta1, x1, y1 = data.odometry[k][1]
             print(f"odometry data: {x0, y0, theta0, x1, y1, theta1}")
-            odom = np.array([np.sqrt(((x1-x0)/1000)**2 + ((y1-y0)/1000)**2), (theta1-theta0)*180/np.pi])
+            odom = np.array([np.sqrt((x1-x0)**2 + (y1-y0)**2), (theta1-theta0)]).squeeze()
             print(f"odometry: {odom}")
             slammer.perform_action(odom)
 

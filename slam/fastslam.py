@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 
 import numpy as np
@@ -37,7 +38,7 @@ class FastSLAM:
         Args:
             odometry: The odometry data as a numpy array of [dx, dy, dtheta]
         """
-        old_particles = self.particles
+        old_particles = copy.copy(self.particles)
         action = lambda pose: self.action_model(pose, odometry)
         for i, picked in enumerate(np.random.choice(len(self.particles), self.settings.num_particles, replace=True)):
             self.particles[i] = old_particles[picked].copy()

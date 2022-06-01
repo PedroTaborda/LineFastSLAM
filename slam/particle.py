@@ -23,7 +23,7 @@ class Particle:
         if map is None:
             # Brand new particle being created: prepare new everything
             self.map = Map()
-            self.pose = np.random.uniform(low=-1, high=1, size=3)
+            self.pose = np.array(pose)#np.random.uniform(low=-1, high=1, size=3)
             self.weight = 1.0
             return
         self.map: Map = map
@@ -52,8 +52,8 @@ class Particle:
         return Particle(self.map.copy(), copy.copy(self.pose), copy.copy(self.weight))
 
     def _draw(self, line: plt.Line2D) -> None:
-        R = np.array([[np.cos(self.pose[2]), -np.sin(self.pose[2])],
-                        [np.sin(self.pose[2]), np.cos(self.pose[2])]])
+        R = np.array([[np.cos(np.deg2rad(self.pose[2])), -np.sin(np.deg2rad(self.pose[2]))],
+                        [np.sin(np.deg2rad(self.pose[2])), np.cos(np.deg2rad(self.pose[2]))]])
         arrow = (R @ self.canonical_arrow.T)
         arrow = (arrow.T + self.pose[:2]).T
         line.set_data(arrow[0, :], arrow[1, :])

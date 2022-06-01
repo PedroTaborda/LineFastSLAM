@@ -34,7 +34,7 @@ class SimulationData:
     map: Map
 
 if __name__=="__main__":
-    sampling_time = 1e-3
+    sampling_time = 1e-1
     sensor_sampling_time = 1e-1
     simulation_time = 5
     map_file = 'map1.map'
