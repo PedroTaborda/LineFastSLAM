@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import math
 import copy
+import os
 
 import scipy.stats
 import numpy as np
@@ -8,6 +9,7 @@ from matplotlib.collections import PathCollection
 from matplotlib.patches import Ellipse
 
 from ekf.ekf import EKF, EKFSettings
+from visualization_utils.mpl_video import to_video
 
 print(f"[WARNING] Unrealistic landmarks.")
 
@@ -23,8 +25,8 @@ class LandmarkSettings(EKFSettings):
     mu0: np.ndarray = np.array([0, 0])
     cov0: np.ndarray = np.diag([0.1, 0.1])  # also wrong but enough for now
     g: callable = lambda x, u, m: x
-    get_Dgx: callable = lambda x, u, m: np.eye(2)
-    get_Dgm: callable = lambda x, u, m: np.zeros((2, 2))
+    get_Dgx: callable = lambda x, u: np.eye(2)
+    get_Dgm: callable = lambda x, u: np.zeros((2, 2))
 
 
 r = 0.2  # std_dev of default linear observation model
@@ -99,7 +101,6 @@ class Landmark(EKF):
     def __del__(self):
         if self.drawn:
             self.std_ellipse.remove()
-            self.p_handle.remove()
             self.z_handle.remove()
 
 
@@ -113,8 +114,8 @@ class Map:
             print(f"Receiving landmark {obs.landmark_id}")
             x0 = obs.h_inv(obs.z)
             print(f"at x0 = {x0}")
-            Dhn = obs.get_Dhn(x0, np.zeros_like(obs.z))
-            Dhx_inv = np.linalg.inv(obs.get_Dhx(x0, np.zeros_like(obs.z)))
+            Dhn = obs.get_Dhn(x0)
+            Dhx_inv = np.linalg.inv(obs.get_Dhx(x0))
             self.landmarks[obs.landmark_id] = Landmark(
                 LandmarkSettings(
                     mu0=x0,
@@ -130,8 +131,9 @@ class Map:
             return likelyhood
 
     def _draw(self, ax, **plot_kwargs):
-        for landmark in self.landmarks.values():
-            landmark._draw(ax, **plot_kwargs)
+        for landmark_id in self.landmarks:
+            # print(f"Drawing landmark {landmark_id}")
+            self.landmarks[landmark_id]._draw(ax, **plot_kwargs)
 
     def copy(self):
         return copy.copy(self)
@@ -152,7 +154,17 @@ if __name__ == '__main__':
     map._draw(ax)
 
     # std deviation of r and fi, noise cov is n_gain @ n_gain.T
-    n_gain = np.diag([0.2, 0.1])*0.1
+    r_std = 0.1
+    fi_std = 0.2
+    n_gain = np.diag([r_std, fi_std])*1
+
+    image_video_dir = os.path.join("data", "images", "map_ex")
+    if not os.path.isdir("data"):
+        os.mkdir("data")
+    if not os.path.isdir(os.path.join("data", "images")):
+        os.mkdir(os.path.join("data", "images"))
+    if not os.path.isdir(image_video_dir):
+        os.mkdir(image_video_dir)
 
     poses = np.array([
         [0, 0.1, np.pi/2],
@@ -196,38 +208,40 @@ if __name__ == '__main__':
         [0.1, 0, np.pi],
         [0, 0, np.pi]
     ])
-    a = 1
+    a = 3
     ax.set_xlim(-0.5*a, 1.5*a)
     ax.set_ylim(-0.5*a, 1.5*a)
-    x_real_landmark_0 = np.array([0.5, 0.5])
-    x_real_landmark_1 = np.array([0.7, 0.7])
+    x_real_landmark_0 = np.array([0.5, 0.5])*a
+    x_real_landmark_1 = np.array([0.7, 0.7])*a
     plt.scatter(x_real_landmark_0[0], x_real_landmark_0[1], marker='x', c='r')
     plt.scatter(x_real_landmark_1[0], x_real_landmark_1[1], marker='x', c='r')
+    plt.xlabel("x [m]")
+    plt.ylabel("y [m]")
     
     for i, pose in enumerate(poses):
         px, py, theta = pose
+        px *= a
+        py *= a
         plt.scatter(px, py, marker=(3, 0, theta*180/np.pi-90), c='r')
 
-        def h(x, n):    # x is landmark position
-            diff = x - np.array([px, py])
-            r = np.linalg.norm(diff)
-            fi = np.arctan2(diff[1], diff[0]) - theta
-            z = np.array([r, fi])
-            return z + n_gain @ n
+        p = np.array([px, py])
+        R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+        
+        def h(x, n):    # z is observed position of landmark in robot's reference frame
+            z_no_noise = R @ (x - p)
+            r_err, ang_err = n_gain @ n
+            R_error = np.array([[np.cos(ang_err), np.sin(ang_err)], [-np.sin(ang_err), np.cos(ang_err)]])
+            return (1 + (r_err/np.linalg.norm(z_no_noise))) * R_error @ z_no_noise
 
         def h_inv(z):
-            r, fi = z
-            x = px + r * np.cos(fi + theta)
-            y = py + r * np.sin(fi + theta)
-            return np.array([x, y])
+            return R.T @ z + p
 
-        def get_Dhx(x, n):
-            px, py = x
-            r = np.linalg.norm(x)
-            return np.array([[px/r,  py/r], [-py/r ** 2, px/r ** 2]])
+        def get_Dhx(x):
+            return R
 
-        def get_Dhn(x, n):
-            return n_gain
+        def get_Dhn(x):
+            z = R @ (x - p)
+            return np.array([[z[0], -z[1]], [z[1], z[0]]]) @ n_gain
         landmark_id = 0
 
 
@@ -236,12 +250,13 @@ if __name__ == '__main__':
         obs1 = Observation(landmark_id=0, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
         map.update(obs1)
 
-        # obs2 = Observation(landmark_id=0, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
-        # # make an observation with noise
-        # z = h(x_real_landmark_1, rng.normal(size=(2,)))
-        # map.update(obs2)
+        # make an observation with noise
+        z = h(x_real_landmark_1, rng.normal(size=(2,)))
+        obs2 = Observation(landmark_id=1, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
+        map.update(obs2)
 
         map._draw(ax)
-        plt.pause(0.3)
+        plt.pause(0.01)
+        plt.savefig(os.path.join(image_video_dir, f"{i:06d}_map_step.png"))
 
-    plt.show()
+    to_video(image_video_dir, "map_ex.mp4", fps=10)
