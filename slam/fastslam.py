@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PathCollection
 
-from slam.map import Landmark, LandmarkSettings, Map
+from slam.map import Landmark, LandmarkSettings, Map, Observation
 from slam.action_model import ActionModelSettings, action_model
 from slam.resampling import ResampleType
 from slam.particle import Particle
@@ -47,7 +47,7 @@ class FastSLAM:
         if self.settings.visualize:
             self._draw_location(actual_location=actual_location)
             
-    def make_observation(self, observation: tuple[int, np.ndarray]) -> None:
+    def make_observation(self, obs: Observation) -> None:
         """Updates all particles' maps using the observation data, and 
         reweighs the particles based on the likelihood of the observation.
 
@@ -55,7 +55,7 @@ class FastSLAM:
             observation: The observation data as a tuple of (id, [x, y(, theta)])
         """
         for particle in self.particles:
-            particle.make_observation(observation)
+            particle.make_observation(obs)
 
         if self.settings.visualize:
             self._draw_map()
@@ -144,6 +144,6 @@ if __name__ == '__main__':
         slam.perform_action(movement, cur_loc)
 
     def observe(id, position):
-        slam.make_observation((id, np.array(position)))
+        slam.make_observation(Observation(landmark_id=id, z=position))
     act([0.0, 0.0])
     observe(0, [0.0, 0.0])

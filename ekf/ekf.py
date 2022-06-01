@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import scipy.stats
 
 
 @dataclass
@@ -13,11 +14,8 @@ class EKFSettings:
     mu0: np.ndarray     # Initial expected value for x
     cov0: np.ndarray    # Initial covariance matrix for x
     g: callable         # g
-    Dgx: callable       # Jacobian of g with regard to x
-    Dgm: callable       # Jacobian of g with regard to m
-    h: callable         # h
-    Dhx: callable       # Jacobian of h with regard to x
-    Dhn: callable       # Jacobian of h with regard to n
+    get_Dgx: callable       # Jacobian of g with regard to x
+    get_Dgm: callable       # Jacobian of g with regard to m
 
 
 # print(f"[WARNING] EKF code does not behave as EKF.")
@@ -29,49 +27,78 @@ class EKF:
         z(k) = h(x(k), n(k))
         x - state (unknown)
         u - input (known)
-        m - multi-nomial process noise with identity covariance matrix, 0 mean
-        n - multi-nomial observation noise with identity covariance matrix, 0 mean
+        m - multi-normal process noise with identity covariance matrix,
+                0 mean and same dimensions as x
+        n - multi-normal observation noise with identity covariance matrix,
+                0 mean and same dimensions as z
         z - observations (known)
 
-        g and h - non-linear, differentiable functions        
+
+        g and h - non-linear, differentiable functions      
+
+        Set sensor model before running update or getting likelihood
     """
 
     def __init__(self, settings: EKFSettings) -> None:
         self.g: callable = settings.g
-        self.Dgx: callable = settings.Dgx
-        self.Dgm: callable = settings.Dgm
-        self.h: callable = settings.h
-        self.Dhx: callable = settings.Dhx
-        self.Dhn: callable = settings.Dhn
+        self.get_Dgx: callable = settings.get_Dgx
+        self.get_Dgm: callable = settings.get_Dgm
         self.mu: np.ndarray = settings.mu0
         self.cov: np.ndarray = settings.cov0
+        self.h: callable = None
+        self.get_Dhx: callable = None
+        self.get_Dhn: callable = None
 
     def predict(self, u):
-        zero = np.zeros_like(self.mu)
+        zero_m = np.zeros_like(self.mu)
         # Get sensitivity to uncertainty
-        Dgx = self.Dgx(self.mu, u,  zero)
-        # Get sensitivity to noise
-        Dgm = self.Dgm(self.mu, u,  zero)
+        Dgx = self.get_Dgx(self.mu, u,  zero_m)
+        # Get sensitivity to process noise
+        Dgm = self.get_Dgm(self.mu, u,  zero_m)
         # Predict expected value
-        self.mu = self.g(self.mu, u, zero)
+        self.mu = self.g(self.mu, u, zero_m)
         # Predict uncertainty
         self.cov = Dgx @ self.cov @ Dgx.T + Dgm @ Dgm.T
 
     def update(self, z):
-        zero = np.zeros_like(self.mu)
+        zero_m = np.zeros_like(self.mu)
+        zero_n = np.zeros_like(self.h(self.mu, zero_m))
         # Get sensitivity to uncertainty
-        Dhx = self.Dhx(self.mu, zero)
-        # Get sensitivity to noise
-        Dhn = self.Dhn(self.mu, zero)
+        Dhx = self.get_Dhx(self.mu, zero_n)
+        # Get sensitivity to measurement noise
+        Dhn = self.get_Dhn(self.mu, zero_n)
         S = Dhx @ self.cov @ Dhx.T + Dhn @ Dhn.T
         K = self.cov @ Dhx.T @ np.linalg.inv(S)
         # Update expected value
-        self.mu = self.mu + K @ (z - self.h(self.mu, zero))
+        self.mu = self.mu + K @ (z - self.h(self.mu, zero_n))
         # Predict uncertainty
         self.cov = self.cov - K @ Dhx @ self.cov
+
+    def get_likelihood(self, z):
+        zero_m = np.zeros_like(self.mu)
+        zero_n = np.zeros_like(self.h(self.mu, zero_m))
+        # Get sensitivity to uncertainty
+        Dhx = self.get_Dhx(self.mu, zero_n)
+        # Get sensitivity to measurement noise
+        Dhn = self.get_Dhn(self.mu, zero_n)
+        # Variance of expected measurements
+        zhat_cov = Dhx @ self.cov @ Dhx.T
+        # Expected measurement
+        zhat_mu = self.h(self.mu, zero_n)
+
+        total_cov = zhat_cov + Dhn @ Dhn.T
+
+        dist = scipy.stats.multivariate_normal(mean=zhat_mu, cov=total_cov)
+
+        dist.pdf(z)
 
     def get_mu(self) -> np.ndarray:
         return self.mu
 
     def get_cov(self) -> np.ndarray:
         return self.cov
+
+    def set_sensor_model(self, h, get_Dhx, get_Dhn):
+        self.h = h
+        self.get_Dhx = get_Dhx
+        self.get_Dhn = get_Dhn

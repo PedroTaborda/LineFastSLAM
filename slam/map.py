@@ -9,10 +9,9 @@ from matplotlib.patches import Ellipse
 
 from ekf.ekf import EKF, EKFSettings
 
-
-r = 0.2  # How much to "trust" measurements
-
 print(f"[WARNING] Unrealistic landmarks.")
+
+
 @dataclass
 class LandmarkSettings(EKFSettings):
     """Settings for the EKF representing a landmark.
@@ -22,13 +21,34 @@ class LandmarkSettings(EKFSettings):
     changed by setting the `h` and `Dh_` functions at measurement time.
     """
     mu0: np.ndarray = np.array([0, 0])
-    cov0: np.ndarray = np.diag([0.1, 0.1]) # also wrong but enough for now
+    cov0: np.ndarray = np.diag([0.1, 0.1])  # also wrong but enough for now
     g: callable = lambda x, u, m: x
-    Dgx: callable = lambda x, u, m: np.eye(2)
-    Dgm: callable = lambda x, u, m: np.zeros((2, 2))
+    get_Dgx: callable = lambda x, u, m: np.eye(2)
+    get_Dgm: callable = lambda x, u, m: np.zeros((2, 2))
+
+
+r = 0.2  # std_dev of default linear observation model
+
+
+@dataclass
+class Observation():
+    """ Observation of a landmark.
+    Observation model:
+        z = h(x, n)
+        where
+        x - landmark position (unknown)
+        n - multi-normal observation noise with identity covariance matrix,
+                0 mean and same dimensions as z
+        z - observations (known)
+
+        h - invertible and differentiable function
+    """
+    landmark_id: int = 0
+    z: np.ndarray = np.array([0, 0])
     h: callable = lambda x, n: x + r * np.eye(2) @ n
-    Dhx: callable = lambda x, n: np.eye(2)
-    Dhn: callable = lambda x, n: r * np.eye(2)
+    h_inv: callable = lambda z: z
+    get_Dhx: callable = lambda x, n: np.eye(2)
+    get_Dhn: callable = lambda x, n: r * np.eye(2)
 
 class Landmark(EKF):
     def __init__(self, settings: LandmarkSettings, mu0: np.ndarray):
@@ -92,20 +112,24 @@ print(f"[WARNING] Map code does not behave as Map.")
 class Map:
     def __init__(self) -> None:
         self.landmarks: dict[int, Landmark] = {}
-    def update(self, pose: np.ndarray, observation: tuple[int, np.ndarray]):
-        landmark_id, landmark_position = observation
-        if landmark_id not in self.landmarks:
-            self.landmarks[landmark_id] = Landmark(
+
+    def update(self, obs: Observation):
+        if obs.landmark_id not in self.landmarks:
+            x0 = obs.h_inv(obs.z)
+            Dhn = obs.get_Dhn(x0, np.zeros_like(obs.z))
+            Dhx_inv = np.linalg.inverse(obs.get_Dhx(x0, np.zeros_like(obs.z)))
+            self.landmarks[obs.landmark_id] = Landmark(
                 LandmarkSettings(),
-                mu0=landmark_position
+                mu0=x0,
+                cov0=Dhx_inv @ Dhn @ Dhn.T @ Dhx_inv.T
             )
             return 1.0
         else:
-            self.landmarks[landmark_id].predict()
-            prev_loc = self.landmarks[landmark_id].get_mu()
-            self.landmarks[landmark_id].update(landmark_position)
-            return 1.0 / (np.linalg.norm(prev_loc - landmark_position) + 1)
-
+            self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
+            likelyhood = self.landmarks[obs.landmark_id].get_likelihood(obs.z)
+            self.landmarks[obs.landmark_id].predict()
+            self.landmarks[obs.landmark_id].update(obs.z)
+            return likelyhood
     def _draw(self, ax, **plot_kwargs):
         for landmark in self.landmarks.values():
             landmark._draw(ax, **plot_kwargs)
@@ -117,6 +141,8 @@ class Map:
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
+    rng = np.random.default_rng()
+
     # Create a map
     map = Map()
 
@@ -125,6 +151,9 @@ if __name__ == '__main__':
 
     # Draw the map
     map._draw(ax)
+
+    # std deviation of r and fi, noise cov is n_gain @ n_gain.T
+    n_gain = np.diag([2, 1])
 
     poses = np.array([
         [0, 0.1, 0],
@@ -171,9 +200,40 @@ if __name__ == '__main__':
     ax.set_xlim(-0.5, 1.5)
     ax.set_ylim(-0.5, 1.5)
     for i, pose in enumerate(poses):
+        px, py, theta = pose
+
+        def h(x, n):    # x is landmark position
+            diff = x - np.array([px, py])
+            r = np.linalg.norm(diff)
+            fi = np.arctan2(diff[1], diff[0]) - theta
+            z = np.array([r, fi])
+            return z + n_gain @ n
+
+        def h_inv(z):
+            r, fi = z
+            x = px + r * np.cos(fi + theta)
+            y = py + r * np.sin(fi + theta)
+            return np.array([x, y])
+
+        def get_Dhx(x, n):
+            px, py = x
+            r = np.norm(x)
+            return np.array([[px/r,  py/r], [-py/r ^ 2, px/r ^ 2]])
+
+        def get_Dhn(x, n):
+            return n_gain
+        landmark_id = 0
+
+        x_real = np.array([0.5, 0.5])
         # make an observation with noise
-        map.update(pose, (0, np.array([0.5, 0.5]) + np.random.randn(2) * 0.1))
-        map.update(pose, (1, np.array([0.2, 0.7]) + np.random.randn(2) * 0.1))
+        z = h(x_real, rng.normal(size=(2,)))
+        obs = Observation(landmark_id=0, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
+        map.update(obs)
+        obs.landmark_id = 1
+        x_real = np.array([0.7, 0.7])
+        # make an observation with noise
+        z = h(x_real, rng.normal(size=(2,)))
+        map.update(obs)
         map._draw(ax)
         plt.pause(0.3)
 

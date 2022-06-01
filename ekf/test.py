@@ -93,8 +93,9 @@ if __name__ == "__main__":
 
     x0 = p
     cov0 = np.diag([1, 3])
-    EKFsets = EKFSettings(g, Dgx, Dgm, h, Dhx, Dhn, x0, cov0)
+    EKFsets = EKFSettings(g, Dgx, Dgm, x0, cov0)
     myEKF = EKF(EKFsets)
+    myEKF.set_sensor_model(h, Dhx, Dhn)
 
     fig, ax = plt.subplots(1, 1, figsize=(6, 6))
     est_ellipse: Ellipse = Ellipse((0, 0), 1, 1, facecolor='none', edgecolor='C00')
