@@ -93,7 +93,7 @@ if __name__ == "__main__":
 
     x0 = p
     cov0 = np.diag([1, 3])
-    EKFsets = EKFSettings(g, Dgx, Dgm, x0, cov0)
+    EKFsets = EKFSettings(x0, cov0, g, Dgx, Dgm)
     myEKF = EKF(EKFsets)
     myEKF.set_sensor_model(h, Dhx, Dhn)
 
