@@ -117,11 +117,13 @@ class Map:
         if obs.landmark_id not in self.landmarks:
             x0 = obs.h_inv(obs.z)
             Dhn = obs.get_Dhn(x0, np.zeros_like(obs.z))
-            Dhx_inv = np.linalg.inverse(obs.get_Dhx(x0, np.zeros_like(obs.z)))
+            Dhx_inv = np.linalg.inv(obs.get_Dhx(x0, np.zeros_like(obs.z)))
             self.landmarks[obs.landmark_id] = Landmark(
-                LandmarkSettings(),
-                mu0=x0,
-                cov0=Dhx_inv @ Dhn @ Dhn.T @ Dhx_inv.T
+                LandmarkSettings(
+                    mu0=x0,
+                    cov0=Dhx_inv @ Dhn @ Dhn.T @ Dhx_inv.T
+                ),
+                mu0=x0
             )
             return 1.0
         else:
@@ -156,51 +158,52 @@ if __name__ == '__main__':
     n_gain = np.diag([2, 1])
 
     poses = np.array([
-        [0, 0.1, 0],
-        [0, 0.2, 0],
-        [0, 0.3, 0],
-        [0, 0.4, 0],
-        [0, 0.5, 0],
-        [0, 0.6, 0],
-        [0, 0.7, 0],
-        [0, 0.8, 0],
-        [0, 0.9, 0],
-        [0, 1, 90],
-        [0.1, 1, 90],
-        [0.2, 1, 90],
-        [0.3, 1, 90],
-        [0.4, 1, 90],
-        [0.5, 1, 90],
-        [0.6, 1, 90],
-        [0.7, 1, 90],
-        [0.8, 1, 90],
-        [0.9, 1, 90],
-        [1, 1, 90],
-        [1, 0.9, 180],
-        [1, 0.8, 180],
-        [1, 0.7, 180],
-        [1, 0.6, 180],
-        [1, 0.5, 180],
-        [1, 0.4, 180],
-        [1, 0.3, 180],
-        [1, 0.2, 180],
-        [1, 0.1, 180],
-        [1, 0, 180],
-        [0.9, 0, 270],
-        [0.8, 0, 270],
-        [0.7, 0, 270],
-        [0.6, 0, 270],
-        [0.5, 0, 270],
-        [0.4, 0, 270],
-        [0.3, 0, 270],
-        [0.2, 0, 270],
-        [0.1, 0, 270],
-        [0, 0, 270]
+        [0, 0.1, 90],
+        [0, 0.2, 90],
+        [0, 0.3, 90],
+        [0, 0.4, 90],
+        [0, 0.5, 90],
+        [0, 0.6, 90],
+        [0, 0.7, 90],
+        [0, 0.8, 90],
+        [0, 0.9, 90],
+        [0, 1, 0],
+        [0.1, 1, 0],
+        [0.2, 1, 0],
+        [0.3, 1, 0],
+        [0.4, 1, 0],
+        [0.5, 1, 0],
+        [0.6, 1, 0],
+        [0.7, 1, 0],
+        [0.8, 1, 0],
+        [0.9, 1, 0],
+        [1, 1, 0],
+        [1, 0.9, 270],
+        [1, 0.8, 270],
+        [1, 0.7, 270],
+        [1, 0.6, 270],
+        [1, 0.5, 270],
+        [1, 0.4, 270],
+        [1, 0.3, 270],
+        [1, 0.2, 270],
+        [1, 0.1, 270],
+        [1, 0, 270],
+        [0.9, 0, 180],
+        [0.8, 0, 180],
+        [0.7, 0, 180],
+        [0.6, 0, 180],
+        [0.5, 0, 180],
+        [0.4, 0, 180],
+        [0.3, 0, 180],
+        [0.2, 0, 180],
+        [0.1, 0, 180],
+        [0, 0, 180]
     ])
     ax.set_xlim(-0.5, 1.5)
     ax.set_ylim(-0.5, 1.5)
     for i, pose in enumerate(poses):
         px, py, theta = pose
+        plt.scatter(px, py, marker=(3, 0, theta-90), c='r')
 
         def h(x, n):    # x is landmark position
             diff = x - np.array([px, py])
@@ -217,22 +220,23 @@ if __name__ == '__main__':
 
         def get_Dhx(x, n):
             px, py = x
-            r = np.norm(x)
-            return np.array([[px/r,  py/r], [-py/r ^ 2, px/r ^ 2]])
+            r = np.linalg.norm(x)
+            return np.array([[px/r,  py/r], [-py/r ** 2, px/r ** 2]])
 
         def get_Dhn(x, n):
             return n_gain
         landmark_id = 0
 
-        x_real = np.array([0.5, 0.5])
+        x_real_landmark_0 = np.array([0.5, 0.5])
         # make an observation with noise
-        z = h(x_real, rng.normal(size=(2,)))
+        z = h(x_real_landmark_0, rng.normal(size=(2,)))
         obs = Observation(landmark_id=0, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
         map.update(obs)
+
         obs.landmark_id = 1
-        x_real = np.array([0.7, 0.7])
+        x_real_landmark_1 = np.array([0.7, 0.7])
         # make an observation with noise
-        z = h(x_real, rng.normal(size=(2,)))
+        z = h(x_real_landmark_1, rng.normal(size=(2,)))
         map.update(obs)
         map._draw(ax)
         plt.pause(0.3)
