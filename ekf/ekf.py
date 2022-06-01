@@ -18,9 +18,6 @@ class EKFSettings:
     get_Dgm: callable       # Jacobian of g with regard to m
 
 
-# print(f"[WARNING] EKF code does not behave as EKF.")
-
-
 class EKF:
     """ EKF implementation. Assuming a system where
         x(k+1) = g(x(k), u(k+1), m(k+1))
@@ -52,9 +49,9 @@ class EKF:
     def predict(self, u):
         zero_m = np.zeros_like(self.mu)
         # Get sensitivity to uncertainty
-        Dgx = self.get_Dgx(self.mu, u,  zero_m)
+        Dgx = self.get_Dgx(self.mu, u)
         # Get sensitivity to process noise
-        Dgm = self.get_Dgm(self.mu, u,  zero_m)
+        Dgm = self.get_Dgm(self.mu, u)
         # Predict expected value
         self.mu = self.g(self.mu, u, zero_m)
         # Predict uncertainty
@@ -64,9 +61,9 @@ class EKF:
         zero_m = np.zeros_like(self.mu)
         zero_n = np.zeros_like(self.h(self.mu, zero_m))
         # Get sensitivity to uncertainty
-        Dhx = self.get_Dhx(self.mu, zero_n)
+        Dhx = self.get_Dhx(self.mu)
         # Get sensitivity to measurement noise
-        Dhn = self.get_Dhn(self.mu, zero_n)
+        Dhn = self.get_Dhn(self.mu)
         S = Dhx @ self.cov @ Dhx.T + Dhn @ Dhn.T
         K = self.cov @ Dhx.T @ np.linalg.inv(S)
         # Update expected value
@@ -78,9 +75,9 @@ class EKF:
         zero_m = np.zeros_like(self.mu)
         zero_n = np.zeros_like(self.h(self.mu, zero_m))
         # Get sensitivity to uncertainty
-        Dhx = self.get_Dhx(self.mu, zero_n)
+        Dhx = self.get_Dhx(self.mu)
         # Get sensitivity to measurement noise
-        Dhn = self.get_Dhn(self.mu, zero_n)
+        Dhn = self.get_Dhn(self.mu)
         # Variance of expected measurements
         zhat_cov = Dhx @ self.cov @ Dhx.T
         # Expected measurement
