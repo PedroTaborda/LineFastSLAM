@@ -1,11 +1,9 @@
-import matplotlib
 from matplotlib import pyplot as plt
-from matplotlib.figure import Figure
 from matplotlib.widgets import Button, Slider
 
 import numpy as np
 
-from .sensor_data import SensorData, load_sensor_data
+from sensor_data.sensor_data import SensorData, load_sensor_data
 
 class SensorDataViewer:
     def __init__(self, sensor_data: SensorData, fig_num: int) -> None:

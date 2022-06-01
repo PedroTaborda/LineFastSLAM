@@ -1,13 +1,12 @@
 import os
 
-import imageio
 import numpy as np
 import matplotlib.pyplot as plt
 
 import rosbags.rosbag1
 import rosbags.serde
 
-from timeseries import Timeseries
+from visualization.mpl_video import to_video
 
 laser_scans = []
 with rosbags.rosbag1.Reader('1.bag') as reader:
@@ -41,22 +40,6 @@ def animate_laser_scans(scans, save_dir = None):
 
         if save_dir is not None:
             fig.savefig(os.path.join(save_dir, f'{idx:05d}.png'))
-
-def to_video(image_dir, video_name: str = 'simulation.mp4', step_size_plot: float=1/10):
-    """ Compile every frame into a video and save it to a file.
-    """
-    print('Saving video...')
-    fps = int(1/step_size_plot)
-    images = []
-    for filename in os.listdir(image_dir):
-        if filename.endswith('.png'):
-            images.append(os.path.join(image_dir, filename))
-    images.sort()
-    writer = imageio.get_writer(video_name, fps=fps)
-    for image in images:
-        writer.append_data(imageio.imread(image))
-        os.remove(image)
-    writer.close()
 
 if __name__ == '__main__':
     image_dir = os.path.join('images')
