@@ -55,16 +55,16 @@ class Landmark(EKF):
         super().__init__(settings)
         self.drawn = False
         self.confidence_interval = 0.99 # draw ellipse for this confidence interval
-        self.latest_z = None
+        self.latest_zx = None
 
     def predict(self):
         super().predict(u=0)
 
-    def update(self, z):
+    def update(self, z, zx): # zx is z with x coords
         super().update(z)
-        self.latest_z = z
+        self.latest_zx = zx
         
-    def _draw(self, ax, color_ellipse='C00', color_p='C01', color_z='C02'):
+    def _draw(self, ax, actual_pos: np.ndarray=None, color_ellipse='C00', color_p='C01', color_z='C02'):
         """Draw the landmark on the given matplotlib axis.
 
         This drawing includes an ellipse which is the level curve of the
@@ -72,15 +72,14 @@ class Landmark(EKF):
         It also includes a marker for the mean of this distribution and another
         for the latest observation.
         """
-        if self.latest_z is None:
+        if self.latest_zx is None:
             return
         p = self.get_mu()
-        z = self.latest_z
+        z = self.latest_zx
         if not self.drawn:
             self.drawn = True    
             self.std_ellipse: Ellipse = Ellipse((0, 0), 1, 1, facecolor='none', edgecolor=color_ellipse)
             ax.add_patch(self.std_ellipse)
-            self.p_handle: PathCollection = ax.scatter(p[0], p[1], marker='x', c=color_p)
             self.z_handle: PathCollection = ax.scatter(z[0], z[1], marker='1', c=color_z)
 
         # number of std's to include in confidence ellipse
@@ -93,9 +92,6 @@ class Landmark(EKF):
         self.std_ellipse.set_height(np.sqrt(w[1])*n_stds*2)
         angle_deg = math.atan2(v[1, 0], v[0, 0]) * 180/np.pi
         self.std_ellipse.set_angle(angle_deg)
-
-        # Plot estimated position
-        self.p_handle.set(offsets=self.get_mu())
 
         # Plot latest observation
         self.z_handle.set(offsets=z)
@@ -114,7 +110,9 @@ class Map:
 
     def update(self, obs: Observation):
         if obs.landmark_id not in self.landmarks:
+            print(f"Receiving landmark {obs.landmark_id}")
             x0 = obs.h_inv(obs.z)
+            print(f"at x0 = {x0}")
             Dhn = obs.get_Dhn(x0, np.zeros_like(obs.z))
             Dhx_inv = np.linalg.inv(obs.get_Dhx(x0, np.zeros_like(obs.z)))
             self.landmarks[obs.landmark_id] = Landmark(
@@ -128,7 +126,7 @@ class Map:
             self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
             likelyhood = self.landmarks[obs.landmark_id].get_likelihood(obs.z)
             self.landmarks[obs.landmark_id].predict()
-            self.landmarks[obs.landmark_id].update(obs.z)
+            self.landmarks[obs.landmark_id].update(obs.z, obs.h_inv(obs.z))
             return likelyhood
 
     def _draw(self, ax, **plot_kwargs):
@@ -142,7 +140,7 @@ class Map:
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(0)
 
     # Create a map
     map = Map()
@@ -154,18 +152,18 @@ if __name__ == '__main__':
     map._draw(ax)
 
     # std deviation of r and fi, noise cov is n_gain @ n_gain.T
-    n_gain = np.diag([2, 1])
+    n_gain = np.diag([0.2, 0.1])*0.1
 
     poses = np.array([
-        [0, 0.1, 90],
-        [0, 0.2, 90],
-        [0, 0.3, 90],
-        [0, 0.4, 90],
-        [0, 0.5, 90],
-        [0, 0.6, 90],
-        [0, 0.7, 90],
-        [0, 0.8, 90],
-        [0, 0.9, 90],
+        [0, 0.1, np.pi/2],
+        [0, 0.2, np.pi/2],
+        [0, 0.3, np.pi/2],
+        [0, 0.4, np.pi/2],
+        [0, 0.5, np.pi/2],
+        [0, 0.6, np.pi/2],
+        [0, 0.7, np.pi/2],
+        [0, 0.8, np.pi/2],
+        [0, 0.9, np.pi/2],
         [0, 1, 0],
         [0.1, 1, 0],
         [0.2, 1, 0],
@@ -177,32 +175,38 @@ if __name__ == '__main__':
         [0.8, 1, 0],
         [0.9, 1, 0],
         [1, 1, 0],
-        [1, 0.9, 270],
-        [1, 0.8, 270],
-        [1, 0.7, 270],
-        [1, 0.6, 270],
-        [1, 0.5, 270],
-        [1, 0.4, 270],
-        [1, 0.3, 270],
-        [1, 0.2, 270],
-        [1, 0.1, 270],
-        [1, 0, 270],
-        [0.9, 0, 180],
-        [0.8, 0, 180],
-        [0.7, 0, 180],
-        [0.6, 0, 180],
-        [0.5, 0, 180],
-        [0.4, 0, 180],
-        [0.3, 0, 180],
-        [0.2, 0, 180],
-        [0.1, 0, 180],
-        [0, 0, 180]
+        [1, 0.9, 3*np.pi/2],
+        [1, 0.8, 3*np.pi/2],
+        [1, 0.7, 3*np.pi/2],
+        [1, 0.6, 3*np.pi/2],
+        [1, 0.5, 3*np.pi/2],
+        [1, 0.4, 3*np.pi/2],
+        [1, 0.3, 3*np.pi/2],
+        [1, 0.2, 3*np.pi/2],
+        [1, 0.1, 3*np.pi/2],
+        [1, 0, 3*np.pi/2],
+        [0.9, 0, np.pi],
+        [0.8, 0, np.pi],
+        [0.7, 0, np.pi],
+        [0.6, 0, np.pi],
+        [0.5, 0, np.pi],
+        [0.4, 0, np.pi],
+        [0.3, 0, np.pi],
+        [0.2, 0, np.pi],
+        [0.1, 0, np.pi],
+        [0, 0, np.pi]
     ])
-    ax.set_xlim(-0.5, 1.5)
-    ax.set_ylim(-0.5, 1.5)
+    a = 1
+    ax.set_xlim(-0.5*a, 1.5*a)
+    ax.set_ylim(-0.5*a, 1.5*a)
+    x_real_landmark_0 = np.array([0.5, 0.5])
+    x_real_landmark_1 = np.array([0.7, 0.7])
+    plt.scatter(x_real_landmark_0[0], x_real_landmark_0[1], marker='x', c='r')
+    plt.scatter(x_real_landmark_1[0], x_real_landmark_1[1], marker='x', c='r')
+    
     for i, pose in enumerate(poses):
         px, py, theta = pose
-        plt.scatter(px, py, marker=(3, 0, theta-90), c='r')
+        plt.scatter(px, py, marker=(3, 0, theta*180/np.pi-90), c='r')
 
         def h(x, n):    # x is landmark position
             diff = x - np.array([px, py])
@@ -226,17 +230,17 @@ if __name__ == '__main__':
             return n_gain
         landmark_id = 0
 
-        x_real_landmark_0 = np.array([0.5, 0.5])
+
         # make an observation with noise
         z = h(x_real_landmark_0, rng.normal(size=(2,)))
-        obs = Observation(landmark_id=0, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
-        map.update(obs)
+        obs1 = Observation(landmark_id=0, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
+        map.update(obs1)
 
-        obs.landmark_id = 1
-        x_real_landmark_1 = np.array([0.7, 0.7])
-        # make an observation with noise
-        z = h(x_real_landmark_1, rng.normal(size=(2,)))
-        map.update(obs)
+        # obs2 = Observation(landmark_id=0, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
+        # # make an observation with noise
+        # z = h(x_real_landmark_1, rng.normal(size=(2,)))
+        # map.update(obs2)
+
         map._draw(ax)
         plt.pause(0.3)
 
