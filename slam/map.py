@@ -51,8 +51,7 @@ class Observation():
     get_Dhn: callable = lambda x, n: r * np.eye(2)
 
 class Landmark(EKF):
-    def __init__(self, settings: LandmarkSettings, mu0: np.ndarray):
-        settings.mu0 = mu0
+    def __init__(self, settings: LandmarkSettings):
         super().__init__(settings)
         self.drawn = False
         self.confidence_interval = 0.99 # draw ellipse for this confidence interval
@@ -122,8 +121,7 @@ class Map:
                 LandmarkSettings(
                     mu0=x0,
                     cov0=Dhx_inv @ Dhn @ Dhn.T @ Dhx_inv.T
-                ),
-                mu0=x0
+                )
             )
             return 1.0
         else:
@@ -132,6 +130,7 @@ class Map:
             self.landmarks[obs.landmark_id].predict()
             self.landmarks[obs.landmark_id].update(obs.z)
             return likelyhood
+
     def _draw(self, ax, **plot_kwargs):
         for landmark in self.landmarks.values():
             landmark._draw(ax, **plot_kwargs)
