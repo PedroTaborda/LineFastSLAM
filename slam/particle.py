@@ -45,7 +45,7 @@ class Particle:
         
         r, phi = obs_data[1]
         p = np.array([px, py])
-        R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+        R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
 
         def h(x, n):    # z is observed position of landmark in robot's reference frame
             z_no_noise = R @ (x - p)
