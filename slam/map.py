@@ -11,8 +11,6 @@ from matplotlib.patches import Ellipse
 from ekf.ekf import EKF, EKFSettings
 from visualization_utils.mpl_video import to_video
 
-print(f"[WARNING] Unrealistic landmarks.")
-
 
 @dataclass
 class LandmarkSettings(EKFSettings):
