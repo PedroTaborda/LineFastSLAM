@@ -7,7 +7,7 @@ class ActionModelSettings:
     uncertainty_type: str = 'additive'
 
     uncertainty_additive_mean: np.ndarray = np.zeros((3,))
-    uncertainty_additive_covariance: np.ndarray = np.diag([0.005, 0.005, 0.01])
+    uncertainty_additive_covariance: np.ndarray = np.square(np.diag([0.005, 0.005, 0.01]))
 
     uncertainty_multiplicative_mean: np.ndarray = np.zeros((2,))
     uncertainty_multiplicative_covariance: np.ndarray = np.diag([0.01, 0.1])

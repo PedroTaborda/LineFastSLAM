@@ -1,18 +1,20 @@
+import os
 import time
+from matplotlib import pyplot as plt
 
 import numpy as np
-from slam.action_model import ActionModelSettings
+from visualization_utils.mpl_video import to_video
 
 import slam.fastslam as fs
 import sensor_data.sensor_data as sd
+import usim.map
 
 def there_is_data(data: sd.SensorData, idx_lidar, idx_camera, idx_odometry):
     return idx_lidar < len(data.lidar) or idx_camera < len(data.camera) or idx_odometry < len(data.odometry)
 
-def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(), realtime: bool = False):
+def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(), images_dir = None, realtime: bool = False):
     slammer = fs.FastSLAM(slam_settings)
     visualization = slam_settings.visualize
-
     i = j = -1
     k = 0
     t0_ros = [data.lidar[i+1][0], data.camera[j+1][0], data.odometry[k+1][0]][np.argmin([data.lidar[i+1][0], data.camera[j+1][0], data.odometry[k+1][0]])]
@@ -25,6 +27,11 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
 
     it = -1
     t0 = time.time()
+    if data.sim_data is not None:
+        map: usim.map.Map = data.sim_data.map
+        for landmark_id in map.landmarks:
+            plt.scatter(map.landmarks[landmark_id][0], map.landmarks[landmark_id][1], c='k', marker='*')
+    t00 = time.time()
     while there_is_data(data, i+1, j+1, k+1):
         if realtime:
             last_t = t if it >= 0 else t0_ros
@@ -44,11 +51,9 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             for obs in data.camera[j][1]:
                 id, landmark = obs
                 r, theta = landmark
-                print(f"landmark: {landmark}")
                 xr, yr, tr_rad = slammer.get_location()
                 xy_observation = np.array([xr + r*np.cos(theta+tr_rad),
                                        yr + r*np.sin(theta+tr_rad)])
-                print(f'Landmark position {xy_observation}')
                 slammer.make_observation((id, np.array([r, theta])))
         elif it == 2:
             k += 1
@@ -59,6 +64,11 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             slammer.perform_action(odom)
             slammer.resample()
 
+            if images_dir is not None:
+                plt.savefig(os.path.join(images_dir, f"{k:06d}.png"))
+    if images_dir is not None:
+        to_video(images_dir, "slam.mp4", fps=10)
+
 
 if __name__ == "__main__":
     import argparse
@@ -66,14 +76,20 @@ if __name__ == "__main__":
     parser.add_argument("--not-realtime", action="store_true")
     parser.add_argument("--no-visualize", action="store_true")
     parser.add_argument("--file", type=str, default='sim0.xz')
+    parser.add_argument("--images-dir", type=str, default='images_slam')
     
     args = parser.parse_args()
 
+    images_dir = os.path.join('data', args.images_dir)
+    if not os.path.isdir(images_dir):
+        os.mkdir(images_dir)
+    
     slam_sensor_data(
         sd.load_sensor_data(args.file),
         slam_settings=fs.FastSLAMSettings(
-            num_particles=20,
+            num_particles=200,
             visualize=not args.no_visualize
         ),
-        realtime=not args.not_realtime
+        realtime=not args.not_realtime,
+        images_dir=images_dir
     )

@@ -20,8 +20,8 @@ class FastSLAMSettings:
     action_model_settings: ActionModelSettings = ActionModelSettings()
     landmark_settings: LandmarkSettings = LandmarkSettings()
     resampling_type: ResampleType = ResampleType.UNIFORM
-    r_std: float = 0.1
-    phi_std: float = 0.1
+    r_std: float = 1
+    phi_std: float = 1
     visualize: bool = False
 
 class FastSLAM:
@@ -63,11 +63,11 @@ class FastSLAM:
         for particle in self.particles:
             particle.make_observation(obs_data, self.n_gain)
         
-        weights = np.array([particle.weight for particle in self.particles])
-        print(weights)
+        # weights = np.array([particle.weight for particle in self.particles])
+        # print(weights)
         self._normalize_particle_weights()
-        weights = np.array([particle.weight for particle in self.particles])
-        print(weights)
+        # weights = np.array([particle.weight for particle in self.particles])
+        # print(weights)
 
         if self.settings.visualize:
             self._draw_map()

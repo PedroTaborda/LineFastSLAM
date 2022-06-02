@@ -10,7 +10,7 @@ import numpy as np
 class Map:
     landmarks: TypedDict('Landmark', {'id': int, 'position': np.ndarray})
 
-    lines: list = field(init=False)
+    lines: list = None
     def compute_lines(self):
         landmarks_lines = []
         for landmark_id in list(self.landmarks.keys()):

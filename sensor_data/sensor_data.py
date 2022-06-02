@@ -5,11 +5,13 @@ import lzma
 from dataclasses import dataclass, asdict
 
 import numpy as np
-from scipy.optimize import least_squares
 import cv2
 
 import rosbags.rosbag1
 import rosbags.serde
+
+import usim.map
+
 
 DEFAULT_SENSOR_DATA_DIR = os.path.join('data', 'sensor_data')
 if not os.path.isdir('data'):
@@ -19,12 +21,22 @@ if not os.path.isdir(DEFAULT_SENSOR_DATA_DIR):
 
 
 @dataclass
+class SimulationData:
+    sampling_time: float
+    robot_pose: np.ndarray   # (N,3) array of robot poses (x,y,theta[rad])
+    map: usim.map.Map
+    def __post_init__(self):
+        if type(self.map) is dict:
+            self.map = usim.map.Map(**self.map)
+
+@dataclass
 class SensorData:
     odometry: list[tuple[int, np.ndarray]]        # (timestamp, [theta, x, y])
     lidar: list[tuple[int, np.ndarray]]           # (timestamp, [phi, r])
     camera: list[tuple[int, list[tuple[int, np.ndarray]]]]           # (timestamp, list[id, [phi, r]])
     comment: str = ''
     from_rosbag: bool = False
+    sim_data: SimulationData = None
 
     def save(self, filename: str) -> None:
         """Save the sensor data to a file.
@@ -33,6 +45,10 @@ class SensorData:
             filename: The filename to save the data to.
         """
         save_sensor_data(self, filename)
+
+    def __post_init__(self) -> None:
+        if type(self.sim_data) is dict:
+            self.sim_data = SimulationData(**self.sim_data)
 
 
 def load_sensor_data(filename: str, dir: os.PathLike=DEFAULT_SENSOR_DATA_DIR) -> SensorData:

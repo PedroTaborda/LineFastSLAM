@@ -26,18 +26,18 @@ from .robot import Robot, RobotSettings, RobotData
 from .sensor import Sensor
 import sensor_data.sensor_data as sd
 
-@dataclass
-class SimulationData:
-    sampling_time: float
-    sensors: sd.SensorData
-    robot_pose: RobotData
-    map: Map
-
 if __name__=="__main__":
-    sampling_time = 1e-1
-    sensor_sampling_time = 1e-1
-    simulation_time = 5
-    map_file = 'map1.map'
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--map", type=str, default="map1.map")
+    parser.add_argument("--sampling-time", type=float, default=0.1)
+    parser.add_argument("--sensor-sampling-time", type=float, default=0.1)
+
+    args = parser.parse_args()
+
+    sampling_time = args.sampling_time
+    sensor_sampling_time = args.sensor_sampling_time
+    map_file = args.map
 
     robot = Robot(RobotSettings(), [0, 0, 0])
     map = load_map(map_file)
@@ -155,9 +155,11 @@ if __name__=="__main__":
         )
         screen.blit(turtle, surf_center)
         pg.display.flip()
-    
+
+    poses = np.array(list(zip(robot.data['x'], robot.data['y'], robot.data['theta'])))
+    sim_data = sd.SimulationData(sampling_time=sampling_time, robot_pose=poses, map=map)
     sensor_data_object = sd.SensorData(odometry=odometry_data, lidar=lidar_data, camera=camera_data,
-                                       comment='From microsimulator')
+                                       comment='From microsimulator', sim_data=sim_data)
 
     files = os.listdir(sd.DEFAULT_SENSOR_DATA_DIR)
     num=0
