@@ -87,7 +87,7 @@ if __name__ == "__main__":
     slam_sensor_data(
         sd.load_sensor_data(args.file),
         slam_settings=fs.FastSLAMSettings(
-            num_particles=200,
+            num_particles=50,
             visualize=not args.no_visualize
         ),
         realtime=not args.not_realtime,

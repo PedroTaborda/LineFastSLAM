@@ -20,8 +20,8 @@ class FastSLAMSettings:
     action_model_settings: ActionModelSettings = ActionModelSettings()
     landmark_settings: LandmarkSettings = LandmarkSettings()
     resampling_type: ResampleType = ResampleType.UNIFORM
-    r_std: float = 1
-    phi_std: float = 1
+    r_std: float = 0.05
+    phi_std: float = 3*np.pi/180
     visualize: bool = False
 
 class FastSLAM:
