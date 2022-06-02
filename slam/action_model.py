@@ -18,8 +18,8 @@ def action_model(state: np.ndarray, odometry: np.ndarray,
 
     if settings.uncertainty_type == 'additive':
         linear_displacement, angular_displacement = odometry
-        new_state = np.array([x + linear_displacement*np.cos(np.deg2rad(theta)),
-                                y + linear_displacement*np.sin(np.deg2rad(theta)),
+        new_state = np.array([x + linear_displacement*np.cos(theta),
+                                y + linear_displacement*np.sin(theta),
                                 theta + angular_displacement])
         new_state += np.random.multivariate_normal(settings.uncertainty_additive_mean, settings.uncertainty_additive_covariance)
         
@@ -27,8 +27,8 @@ def action_model(state: np.ndarray, odometry: np.ndarray,
         odometry += np.random.multivariate_normal(settings.uncertainty_multiplicative_mean, settings.uncertainty_multiplicative_covariance)  
         linear_displacement, angular_displacement = odometry
 
-        new_state = np.array([x + linear_displacement*np.cos(np.deg2rad(theta)),
-                                y + linear_displacement*np.sin(np.deg2rad(theta)),
+        new_state = np.array([x + linear_displacement*np.cos(theta),
+                                y + linear_displacement*np.sin(theta),
                                 theta + angular_displacement])
     else:
         raise ValueError('Action model uncertainty type must be of additive or multiplicative type.')

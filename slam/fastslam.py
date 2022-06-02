@@ -20,6 +20,8 @@ class FastSLAMSettings:
     action_model_settings: ActionModelSettings = ActionModelSettings()
     landmark_settings: LandmarkSettings = LandmarkSettings()
     resampling_type: ResampleType = ResampleType.UNIFORM
+    r_std: float = 0.1
+    phi_std: float = 0.1
     visualize: bool = False
 
 class FastSLAM:
@@ -28,6 +30,7 @@ class FastSLAM:
         self.action_model = lambda pose, odometry: action_model(pose, odometry, self.settings.action_model_settings)
         self.particles: list[Particle] = [Particle() for _ in range(settings.num_particles)]
         self.particle_markers = [None]*settings.num_particles
+        self.n_gain = np.diag([settings.r_std, settings.phi_std])
 
         if settings.visualize:
             self._init_visualizer()
@@ -40,25 +43,35 @@ class FastSLAM:
         """
         old_particles = copy.copy(self.particles)
         action = lambda pose: self.action_model(pose, odometry)
-        for i, picked in enumerate(np.random.choice(len(self.particles), self.settings.num_particles, replace=True)):
+        self._normalize_particle_weights()
+        weights = np.array([particle.weight for particle in self.particles])
+        for i, picked in enumerate(np.random.choice(len(self.particles), self.settings.num_particles, replace=True, p=weights)):
             self.particles[i] = old_particles[picked].copy()
             self.particles[i].apply_action(action)
+            self.particles[i].weight = 1/self.settings.num_particles
 
         if self.settings.visualize:
             self._draw_location(actual_location=actual_location)
             
-    def make_observation(self, obs: Observation) -> None:
+    def make_observation(self, obs_data: tuple[int, tuple[float, float]]) -> None:
         """Updates all particles' maps using the observation data, and 
         reweighs the particles based on the likelihood of the observation.
 
         Args:
-            observation: The observation data as a tuple of (id, [x, y(, theta)])
+            observation: The observation data as a tuple of (id, [r (m), phi (rad)])
         """
         for particle in self.particles:
-            particle.make_observation(obs)
+            particle.make_observation(obs_data, self.n_gain)
+        
+        weights = np.array([particle.weight for particle in self.particles])
+        print(weights)
+        self._normalize_particle_weights()
+        weights = np.array([particle.weight for particle in self.particles])
+        print(weights)
 
         if self.settings.visualize:
             self._draw_map()
+        a = 1 # for debug purposes
 
     def resample(self) -> None:
         """Resamples the particles based on their weights.
@@ -82,10 +95,16 @@ class FastSLAM:
         """
         return self.particles[0].map
     
+    def _normalize_particle_weights(self) -> None:
+        weights = np.array([particle.weight for particle in self.particles])
+        weights = weights / weights.sum()
+        for i, particle in enumerate(self.particles):
+            particle.weight = weights[i]
+
     # Visualization methods (if settings.visualize is True)
     def _init_visualizer(self, ylim: tuple=(-3, 3), xlim: tuple=(-3, 3)) -> None:
         self.fig, self.ax = plt.subplots(1, 1, figsize=(6, 6))
-        self.actual_location_dot: PathCollection = self.ax.scatter(0, 0, marker='x', c='k')
+        self.actual_location_dot: PathCollection = self.ax.scatter(0, 0, marker='x', c='k', alpha=0.0)
         self.ax.set_xlim(*xlim)
         self.ax.set_ylim(*ylim)
 
@@ -121,7 +140,7 @@ class FastSLAM:
 if __name__ == '__main__':
     from math import *
     slam_settings = FastSLAMSettings(
-        num_particles=10,
+        num_particles=1,
         action_model_settings=ActionModelSettings(
         ),
         landmark_settings=LandmarkSettings(

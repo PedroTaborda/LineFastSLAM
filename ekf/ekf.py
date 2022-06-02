@@ -87,7 +87,7 @@ class EKF:
 
         dist = scipy.stats.multivariate_normal(mean=zhat_mu, cov=total_cov)
 
-        dist.pdf(z)
+        return dist.pdf(z)
 
     def get_mu(self) -> np.ndarray:
         return self.mu

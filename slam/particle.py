@@ -34,14 +34,44 @@ class Particle:
     def apply_action(self, action: Callable[[np.ndarray], np.ndarray]) -> None:
         self.pose = action(self.pose)
 
-    def make_observation(self, obs: Observation) -> None:
+    def make_observation(self, obs_data: tuple[int, tuple[float, float]], n_gain: np.ndarray) -> None:
         """Make an observation of a landmark on the map.
 
         Side effects:
             -The map is updated with the observation (a landmark may be added)
             -The particle's weight is updated
         """
-        self.weight *= self.map.update(self.pose, obs)
+        px, py, theta = self.pose
+        
+        r, phi = obs_data[1]
+        p = np.array([px, py])
+        R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+
+        def h(x, n):    # z is observed position of landmark in robot's reference frame
+            z_no_noise = R @ (x - p)
+            r_err, ang_err = n_gain @ n
+            R_error = np.array([[np.cos(ang_err), np.sin(ang_err)], [-np.sin(ang_err), np.cos(ang_err)]])
+            return (1 + (r_err/np.linalg.norm(z_no_noise))) * R_error @ z_no_noise
+
+        def h_inv(z):
+            return R.T @ z + p
+
+        def get_Dhx(x):
+            return R
+
+        def get_Dhn(x):
+            z = R @ (x - p)
+            return np.array([[z[0], -z[1]], [z[1], z[0]]]) @ n_gain
+        
+        obs = Observation(
+            landmark_id=obs_data[0],
+            z=np.array([r*np.cos(phi), r*np.sin(phi)]),
+            h=h,
+            h_inv=h_inv,
+            get_Dhx=get_Dhx,
+            get_Dhn=get_Dhn,
+        )
+        self.weight *= self.map.update(obs)
 
     def copy(self) -> Particle:
         """Copy the particle, creating a new particle sharing the same map.

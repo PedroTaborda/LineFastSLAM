@@ -53,7 +53,7 @@ class Sensor:
         measured_x = robot_state[1] + np.random.normal(0.0, self.odometry_cartesian_noise_sigma, 1)
         measured_y = robot_state[2] + np.random.normal(0.0, self.odometry_cartesian_noise_sigma, 1)
 
-        return np.array([measured_angle, measured_x, measured_y])
+        return np.array([np.deg2rad(measured_angle), measured_x, measured_y])
 
     def camera_measurements(self, robot_state: np.ndarray) -> list[tuple[int, np.ndarray]]:
         observed_landmarks = []
@@ -75,7 +75,7 @@ class Sensor:
             is_in_fov = landmark_relative_angle > - self.camera_fov / 2 and landmark_relative_angle < self.camera_fov / 2
             is_in_range = landmark_relative_distance < self.camera_range
             if is_in_fov and is_in_range:
-                observed_landmarks += [(landmark_id, np.array([landmark_relative_angle, landmark_relative_distance]))]
+                observed_landmarks += [(landmark_id, np.array([landmark_relative_distance, np.deg2rad(landmark_relative_angle)]))]
         
         return observed_landmarks
         

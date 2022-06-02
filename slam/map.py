@@ -62,8 +62,8 @@ class Landmark(EKF):
     def predict(self):
         super().predict(u=0)
 
-    def update(self, z, zx): # zx is z with x coords
-        super().update(z)
+    def update(self, zx): # zx is z with x coords
+        super().update(self.h(zx, np.zeros_like(zx)))
         self.latest_zx = zx
         
     def _draw(self, ax, actual_pos: np.ndarray=None, color_ellipse='C00', color_p='C01', color_z='C02'):
@@ -104,16 +104,14 @@ class Landmark(EKF):
             self.z_handle.remove()
 
 
-print(f"[WARNING] Map code does not behave as Map.")
+# print(f"[WARNING] Map code does not behave as Map.")
 class Map:
     def __init__(self) -> None:
         self.landmarks: dict[int, Landmark] = {}
 
     def update(self, obs: Observation):
         if obs.landmark_id not in self.landmarks:
-            print(f"Receiving landmark {obs.landmark_id}")
             x0 = obs.h_inv(obs.z)
-            print(f"at x0 = {x0}")
             Dhn = obs.get_Dhn(x0)
             Dhx_inv = np.linalg.inv(obs.get_Dhx(x0))
             self.landmarks[obs.landmark_id] = Landmark(
@@ -127,7 +125,7 @@ class Map:
             self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
             likelyhood = self.landmarks[obs.landmark_id].get_likelihood(obs.z)
             self.landmarks[obs.landmark_id].predict()
-            self.landmarks[obs.landmark_id].update(obs.z, obs.h_inv(obs.z))
+            self.landmarks[obs.landmark_id].update(obs.h_inv(obs.z))
             return likelyhood
 
     def _draw(self, ax, **plot_kwargs):

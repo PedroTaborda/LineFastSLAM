@@ -37,46 +37,42 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
         t0 = time.time()
         if it == 0:
             i += 1
-            print(data.lidar[i][0]/1e9, "lidar")
+            # print(data.lidar[i][0]/1e9, "lidar")
         elif it == 1:
             j += 1
-            print(data.camera[j][0]/1e9, "camera")
-            print(f"camera data: {data.camera[j][1]}")
+            # print(data.camera[j][0]/1e9, "camera")
             for obs in data.camera[j][1]:
                 id, landmark = obs
-                theta, r = landmark
-                xr, yr, tr = slammer.get_location()
-                xy_observation = np.array([xr + r*np.cos(np.deg2rad(theta + tr)),
-                                       yr + r*np.sin(np.deg2rad(theta + tr))])
+                r, theta = landmark
+                print(f"landmark: {landmark}")
+                xr, yr, tr_rad = slammer.get_location()
+                xy_observation = np.array([xr + r*np.cos(theta+tr_rad),
+                                       yr + r*np.sin(theta+tr_rad)])
                 print(f'Landmark position {xy_observation}')
-                slammer.make_observation((id, xy_observation))
+                slammer.make_observation((id, np.array([r, theta])))
         elif it == 2:
             k += 1
-            print(data.odometry[k][0]/1e9, "odometry")
-            #print(f"odometry data: {data.odometry[k][1]}")
+            # print(data.odometry[k][0]/1e9, "odometry")
             theta0, x0, y0 = data.odometry[k-1][1]
             theta1, x1, y1 = data.odometry[k][1]
-            print(f"odometry data: {x0, y0, theta0, x1, y1, theta1}")
             odom = np.array([np.sqrt((x1-x0)**2 + (y1-y0)**2), (theta1-theta0)]).squeeze()
-            print(f"odometry: {odom}")
             slammer.perform_action(odom)
-
-        if j % 10 == 0:
             slammer.resample()
+
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--not-realtime", action="store_true")
     parser.add_argument("--no-visualize", action="store_true")
-    parser.add_argument("--file", type=str, default='camera-unmeasured.xz')
+    parser.add_argument("--file", type=str, default='sim0.xz')
     
     args = parser.parse_args()
 
     slam_sensor_data(
         sd.load_sensor_data(args.file),
         slam_settings=fs.FastSLAMSettings(
-            num_particles=10,
+            num_particles=20,
             visualize=not args.no_visualize
         ),
         realtime=not args.not_realtime
