@@ -128,7 +128,6 @@ class Map:
 
     def _draw(self, ax, **plot_kwargs):
         for landmark_id in self.landmarks:
-            # print(f"Drawing landmark {landmark_id}")
             self.landmarks[landmark_id]._draw(ax, **plot_kwargs)
 
     def copy(self):

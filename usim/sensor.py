@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .robot import Robot
-from .map import Map
+from .umap import UsimMap
 
 @dataclass
 class SensorSettings:
@@ -21,9 +21,9 @@ class SensorSettings:
     odometry_cartesian_noise_sigma: float = 0   # Standard Deviation of Odometry Cartesian Position
 
 class Sensor:
-    def __init__(self, robot: Robot, map: Map, sensor_parameters: SensorSettings = SensorSettings()) -> None:
+    def __init__(self, robot: Robot, map: UsimMap, sensor_parameters: SensorSettings = SensorSettings()) -> None:
         self.robot = robot
-        self.map: Map = map
+        self.map: UsimMap = map
 
         self.camera_fov = sensor_parameters.camera_fov
         self.camera_range = sensor_parameters.camera_range

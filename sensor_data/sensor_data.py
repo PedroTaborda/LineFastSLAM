@@ -10,7 +10,7 @@ import cv2
 import rosbags.rosbag1
 import rosbags.serde
 
-import usim.map
+import usim.umap
 
 
 DEFAULT_SENSOR_DATA_DIR = os.path.join('data', 'sensor_data')
@@ -24,10 +24,10 @@ if not os.path.isdir(DEFAULT_SENSOR_DATA_DIR):
 class SimulationData:
     sampling_time: float
     robot_pose: np.ndarray   # (N,3) array of robot poses (x,y,theta[rad])
-    map: usim.map.Map
+    map: usim.umap.UsimMap
     def __post_init__(self):
         if type(self.map) is dict:
-            self.map = usim.map.Map(**self.map)
+            self.map = usim.umap.UsimMap(**self.map)
 
 @dataclass
 class SensorData:

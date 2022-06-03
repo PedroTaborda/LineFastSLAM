@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import copy
+import inspect
 from dataclasses import dataclass
 
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PathCollection
 
-from slam.map import Landmark, LandmarkSettings, Map, Observation
+from slam.map import LandmarkSettings, Map, Observation
 from slam.action_model import ActionModelSettings, action_model
 from slam.resampling import ResampleType
 from slam.particle import Particle
@@ -23,19 +24,32 @@ class FastSLAMSettings:
     r_std: float = 0.05
     phi_std: float = 3*np.pi/180
     visualize: bool = False
+    trajectory_trail: bool = False
 
 class FastSLAM:
-    def __init__(self, settings: FastSLAMSettings = FastSLAMSettings()) -> None:
+    def __init__(self, settings: FastSLAMSettings = FastSLAMSettings(), ax: plt.Axes = None) -> None:
         self.settings: FastSLAMSettings = settings
         self.action_model = lambda pose, odometry: action_model(pose, odometry, self.settings.action_model_settings)
         self.particles: list[Particle] = [Particle() for _ in range(settings.num_particles)]
         self.particle_markers = [None]*settings.num_particles
         self.n_gain = np.diag([settings.r_std, settings.phi_std])
 
+        self.map_estimate: Map = None
+
+        # Contains the estimated location of the robot as a list of (time, [x, y, theta])
+        self.trajectory_estimate: list[tuple[int, np.ndarray]] = []
+
         if settings.visualize:
+            if ax is None:
+                _, ax = plt.subplots()
+                self.ax = ax
+            else:
+                self.ax = ax
             self._init_visualizer()
 
-    def perform_action(self, odometry: np.ndarray, actual_location: np.ndarray = None) -> None:
+        self.cur_time: float = 0
+
+    def perform_action(self, t: float, odometry: np.ndarray, actual_location: np.ndarray = None) -> None:
         """Update the pose of all particles using the odometry data.
 
         Args:
@@ -50,10 +64,18 @@ class FastSLAM:
             self.particles[i].apply_action(action)
             self.particles[i].weight = 1/self.settings.num_particles
 
+        self.trajectory_estimate += [(t, self.pose_estimate())]
+        
+        if actual_location is not None:
+            self.trajectory_estimate += [(t, actual_location)]
+
         if self.settings.visualize:
             self._draw_location(actual_location=actual_location)
-            
-    def make_observation(self, obs_data: tuple[int, tuple[float, float]]) -> None:
+        
+        if t < self.cur_time:
+            print(f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
+
+    def make_observation(self, t: float, obs_data: tuple[int, tuple[float, float]]) -> None:
         """Updates all particles' maps using the observation data, and 
         reweighs the particles based on the likelihood of the observation.
 
@@ -62,24 +84,22 @@ class FastSLAM:
         """
         for particle in self.particles:
             particle.make_observation(obs_data, self.n_gain)
-        
-        # weights = np.array([particle.weight for particle in self.particles])
-        # print(weights)
-        self._normalize_particle_weights()
-        # weights = np.array([particle.weight for particle in self.particles])
-        # print(weights)
 
+        self._normalize_particle_weights()
         if self.settings.visualize:
             self._draw_map()
-        a = 1 # for debug purposes
+        _ = 1 # for debug purposes
 
+        if t < self.cur_time:
+            print(f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
+            
     def resample(self) -> None:
         """Resamples the particles based on their weights.
         """
         weights = np.array([particle.weight for particle in self.particles])
         self.particles = self.settings.resampling_type(self.particles, weights)
 
-    def get_location(self) -> np.ndarray:
+    def pose_estimate(self) -> np.ndarray:
         """Returns the estimated location of the robot.
 
         Returns:
@@ -87,13 +107,15 @@ class FastSLAM:
         """
         return np.array([particle.pose for particle in self.particles]).mean(axis=0)
 
-    def get_map(self) -> Map:
+    def map_estimate(self) -> Map:
         """Returns the map of the robot.
 
         Returns:
             The map of the robot.
         """
-        return self.particles[0].map
+        particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
+        map_estimate: Map = self.particles[particle_idx_for_map].map
+        return map_estimate
     
     def _normalize_particle_weights(self) -> None:
         weights = np.array([particle.weight for particle in self.particles])
@@ -103,7 +125,6 @@ class FastSLAM:
 
     # Visualization methods (if settings.visualize is True)
     def _init_visualizer(self, ylim: tuple=(-3, 3), xlim: tuple=(-3, 3)) -> None:
-        self.fig, self.ax = plt.subplots(1, 1, figsize=(6, 6))
         self.actual_location_dot: PathCollection = self.ax.scatter(0, 0, marker='x', c='k', alpha=0.0)
         self.ax.set_xlim(*xlim)
         self.ax.set_ylim(*ylim)
@@ -116,29 +137,41 @@ class FastSLAM:
 
         x = 6
         self.ax.plot([-x, x, x, -x], [-x, -x, x, x], c='k', linewidth=0)
-    
+
+        if self.settings.trajectory_trail:
+            self.actual_trajectory_trail, = self.ax.plot([], [], c='C03', linewidth=0.5, label='Actual Trajectory')
+            self.estimated_trajectory_trail, = self.ax.plot([], [], c='C04', linewidth=0.5, label='Estimated trajectory')
+
     def _draw_location(self, actual_location: np.ndarray = None) -> None:
         for idx, particle in enumerate(self.particles):
             particle._draw(self.particle_markers[idx])
         if actual_location is not None:
             self.actual_location_dot.set(offsets = [actual_location[:2]])
 
+        if self.settings.trajectory_trail:
+            pose_estimate = self.pose_estimate()
+            prev_traj_actual = self.actual_trajectory_trail.get_data(orig=True)
+            self.actual_trajectory_trail.set_data(list(prev_traj_actual[0]) + [actual_location[0]], list(prev_traj_actual[1]) + [actual_location[1]])
+            prev_traj_est = self.estimated_trajectory_trail.get_data(orig=True)
+            self.estimated_trajectory_trail.set_data(list(prev_traj_est[0]) + [pose_estimate[0]], list(prev_traj_est[1]) + [pose_estimate[1]])
+        
         self._draw()
 
-    def _draw_map(self, actual_map = None) -> None:
+    def _draw_map(self) -> None:
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
         map_estimate: Map = self.particles[particle_idx_for_map].map
         map_estimate._draw(self.ax, color_ellipse='C01', color_p='C01', color_z='C01')
         self._draw()
 
     def _draw(self) -> None:
-        self.ax.relim()
+        # self.ax.relim()
         self.ax.autoscale_view(False,True,True)
         plt.pause(0.01)
         plt.show(block=False)
 
 if __name__ == '__main__':
     from math import *
+    import time
     slam_settings = FastSLAMSettings(
         num_particles=1,
         action_model_settings=ActionModelSettings(
@@ -150,6 +183,7 @@ if __name__ == '__main__':
     )
 
     slam = FastSLAM(slam_settings)
+    t0 = time.time()
     def loc(location, movement):
         return action_model(location, movement, ActionModelSettings(
             uncertainty_additive_covariance=np.diag([0.0, 0.0, 0.0]),
@@ -160,9 +194,9 @@ if __name__ == '__main__':
         movement = np.array(movement)
         global cur_loc
         cur_loc = loc(cur_loc, movement)
-        slam.perform_action(movement, cur_loc)
+        slam.perform_action(time.time()-t0, movement, cur_loc)
 
     def observe(id, position):
-        slam.make_observation(Observation(landmark_id=id, z=position))
+        slam.make_observation(time.time()-t0, (id, position))
     act([0.0, 0.0])
     observe(0, [0.0, 0.0])
