@@ -150,3 +150,6 @@ saut_env/
 
 # VSCode settings
 .vscode/
+
+# Mac stuff
+.DS_Store/
