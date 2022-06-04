@@ -21,7 +21,8 @@ class LandmarkSettings(EKFSettings):
     changed by setting the `h` and `Dh_` functions at measurement time.
     """
     mu0: np.ndarray = np.array([0, 0])
-    cov0: np.ndarray = np.diag([0.1, 0.1])  # also wrong but enough for now
+    cov0: np.ndarray = np.square(np.diag([0.1, 0.1]))  # also wrong but enough for now
+    min_cov: np.ndarray = np.square(np.diag([0.01, 0.01]))
     g: callable = lambda x, u, m: x
     get_Dgx: callable = lambda x, u: np.eye(2)
     get_Dgm: callable = lambda x, u: np.zeros((2, 2))
@@ -128,7 +129,6 @@ class Map:
 
     def _draw(self, ax, **plot_kwargs):
         for landmark_id in self.landmarks:
-            # print(f"Drawing landmark {landmark_id}")
             self.landmarks[landmark_id]._draw(ax, **plot_kwargs)
 
     def copy(self):

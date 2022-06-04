@@ -21,7 +21,7 @@ from pygame.locals import (
     QUIT,
 )
 
-from .map import Map, load_map
+from .umap import UsimMap, load_map
 from .robot import Robot, RobotSettings, RobotData
 from .sensor import Sensor
 import sensor_data.sensor_data as sd

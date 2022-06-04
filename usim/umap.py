@@ -7,10 +7,14 @@ from typing import TypedDict
 import numpy as np
 
 @dataclass
-class Map:
+class UsimMap:
     landmarks: TypedDict('Landmark', {'id': int, 'position': np.ndarray})
 
     lines: list = None
+
+    def __post_init__(self):
+        self.lines = self.compute_lines()
+
     def compute_lines(self):
         landmarks_lines = []
         for landmark_id in list(self.landmarks.keys()):
@@ -19,7 +23,7 @@ class Map:
                 x1, y1 = self.landmarks[landmark_id+1]
                 landmarks_lines.append((x0, y0, x1, y1))
         return landmarks_lines
-                
+
 
 def load_map(map_file: os.PathLike):
     landmarks = {}
@@ -36,8 +40,7 @@ def load_map(map_file: os.PathLike):
                 x = float(args[1])
                 y = float(args[2])
                 landmarks[id] = np.array([x, y])
-    map_w_landmarks = Map(landmarks=landmarks)
-    map_w_landmarks.lines = map_w_landmarks.compute_lines()
+    map_w_landmarks = UsimMap(landmarks=landmarks)
     return map_w_landmarks
     
 if __name__ == '__main__':
