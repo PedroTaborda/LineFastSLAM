@@ -17,6 +17,8 @@ class EKFSettings:
     get_Dgx: callable       # Jacobian of g with regard to x
     get_Dgm: callable       # Jacobian of g with regard to m
 
+    min_cov: np.ndarray = None
+
 
 class EKF:
     """ EKF implementation. Assuming a system where
@@ -45,6 +47,7 @@ class EKF:
         self.h: callable = None
         self.get_Dhx: callable = None
         self.get_Dhn: callable = None
+        self.min_cov = settings.min_cov
 
     def predict(self, u):
         zero_m = np.zeros_like(self.mu)
@@ -56,6 +59,8 @@ class EKF:
         self.mu = self.g(self.mu, u, zero_m)
         # Predict uncertainty
         self.cov = Dgx @ self.cov @ Dgx.T + Dgm @ Dgm.T
+
+        self._check_cov()
 
     def update(self, z):
         zero_m = np.zeros_like(self.mu)
@@ -70,6 +75,8 @@ class EKF:
         self.mu = self.mu + K @ (z - self.h(self.mu, zero_n))
         # Predict uncertainty
         self.cov = self.cov - K @ Dhx @ self.cov
+
+        self._check_cov()
 
     def get_likelihood(self, z):
         zero_m = np.zeros_like(self.mu)
@@ -99,3 +106,8 @@ class EKF:
         self.h = h
         self.get_Dhx = get_Dhx
         self.get_Dhn = get_Dhn
+
+    def _check_cov(self):
+        if(self.min_cov is not None):
+            if(np.linalg.det(self.cov) < np.linalg.det(self.min_cov)):
+                self.cov += self.min_cov

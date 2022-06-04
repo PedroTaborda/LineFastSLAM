@@ -13,7 +13,7 @@ class UncertaintyType(Enum):
 
 @dataclass
 class ActionModelSettings:
-    uncertainty_type: UncertaintyType = UncertaintyType.ODOM_MULT
+    uncertainty_type: UncertaintyType = UncertaintyType.POSE_ADD
 
     POSE_ADD_MU: np.ndarray = np.zeros((3,))
     POSE_ADD_COV: np.ndarray = np.square(np.diag([0.01, 0.01, 0.5*np.pi/180]))
@@ -22,7 +22,7 @@ class ActionModelSettings:
     ODOM_ADD_COV: np.ndarray = np.square(np.diag([0.1, 0.3]))
 
     ODOM_MULT_MU: np.ndarray = np.array([1, 1])
-    ODOM_MULT_COV: np.ndarray = np.square(np.diag([0.3, 0.1]))
+    ODOM_MULT_COV: np.ndarray = np.square(np.diag([0.1, 0.1]))
 
 
 def action_model(state: np.ndarray, odometry: np.ndarray,
@@ -46,10 +46,8 @@ def action_model(state: np.ndarray, odometry: np.ndarray,
                               y + linear_displacement*np.sin(theta),
                               theta + angular_displacement])
     elif settings.uncertainty_type == UncertaintyType.ODOM_MULT:
-        print(f" before {odometry}")
         odometry *= np.random.multivariate_normal(settings.ODOM_MULT_MU,
                                                   settings.ODOM_MULT_COV)
-        print(f" after {odometry}")
         linear_displacement, angular_displacement = odometry
 
         new_state = np.array([x + linear_displacement*np.cos(theta),

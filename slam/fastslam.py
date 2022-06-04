@@ -57,12 +57,9 @@ class FastSLAM:
         """
         old_particles = copy.copy(self.particles)
         action = lambda pose: self.action_model(pose, odometry)
-        self._normalize_particle_weights()
-        weights = np.array([particle.weight for particle in self.particles])
-        for i, picked in enumerate(np.random.choice(len(self.particles), self.settings.num_particles, replace=True, p=weights)):
-            self.particles[i] = old_particles[picked].copy()
+        self.resample()
+        for i in range(len(self.particles)):
             self.particles[i].apply_action(action)
-            self.particles[i].weight = 1/self.settings.num_particles
 
         self.trajectory_estimate += [(t, self.pose_estimate())]
         
@@ -97,7 +94,7 @@ class FastSLAM:
         """Resamples the particles based on their weights.
         """
         weights = np.array([particle.weight for particle in self.particles])
-        self.particles = self.settings.resampling_type(self.particles, weights)
+        self.particles = self.settings.resampling_type(self.particles, weights, self.settings.num_particles)
 
     def pose_estimate(self) -> np.ndarray:
         """Returns the estimated location of the robot.
