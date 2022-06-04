@@ -24,11 +24,11 @@ def to_video(image_dir, video_name: str = 'simulation.mp4', step_size_plot: floa
     writer.close()
 
 if __name__=="__main__":
-    data = sd.rosbag_to_data('data/camera-unmeasured.bag')
-    imgs = sd.rosbag_to_imgs('data/camera-unmeasured.bag')
-    camera_matrix, distortion_coefficients = sd.rosbag_camera_info('data/camera-unmeasured.bag')
+    #data = sd.rosbag_to_data('data/corridor.bag')
+    imgs = sd.rosbag_to_imgs('data/corridor-w-light.bag')
+    camera_matrix, distortion_coefficients = sd.rosbag_camera_info('data/corridor-w-light.bag')
 
-    save_dir = 'data/video_d_a/'
+    save_dir = None
     plt.ion()
     for idx, image in enumerate(imgs):
         new_image, _ = sd.detect_landmarks(image, camera_matrix, distortion_coefficients)
@@ -41,4 +41,4 @@ if __name__=="__main__":
         if save_dir is not None:
             fig.savefig(os.path.join(save_dir, f'{idx:05d}.png'))
 
-    to_video(save_dir)
+    #to_video(save_dir)
