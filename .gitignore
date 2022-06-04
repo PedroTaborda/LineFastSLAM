@@ -152,4 +152,4 @@ saut_env/
 .vscode/
 
 # Mac stuff
-.DS_Store/
+.DS_Store
