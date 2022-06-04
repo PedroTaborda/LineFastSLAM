@@ -186,8 +186,8 @@ if __name__ == '__main__':
     t0 = time.time()
     def loc(location, movement):
         return action_model(location, movement, ActionModelSettings(
-            uncertainty_additive_covariance=np.diag([0.0, 0.0, 0.0]),
-            uncertainty_multiplicative_covariance=np.diag([0.0, 0.0]),
+            POSE_ADD_COV=np.diag([0.0, 0.0, 0.0]),
+            ODOM_ADD_COV=np.diag([0.0, 0.0]),
             ))
     cur_loc = np.array([0, 0, 0])
     def act(movement):
