@@ -93,6 +93,7 @@ if __name__ == "__main__":
     parser.add_argument("--not-realtime", action="store_true")
     parser.add_argument("--no-visualize", action="store_true")
     parser.add_argument("--file", type=str, default='sim0.xz')
+    parser.add_argument("-N", type=int, default=50)
     parser.add_argument("--images-dir", type=str, default='images_slam')
     
     args = parser.parse_args()
@@ -104,7 +105,7 @@ if __name__ == "__main__":
     slam_sensor_data(
         sd.load_sensor_data(args.file),
         slam_settings=fs.FastSLAMSettings(
-            num_particles=50,
+            num_particles=args.N,
             visualize=not args.no_visualize,
             trajectory_trail=True,
         ),
