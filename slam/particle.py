@@ -6,7 +6,7 @@ import copy
 import numpy as np
 import matplotlib.pyplot as plt
 
-from slam.map import Map, Observation
+from slam.map import LandmarkSettings, Map, Observation
 
 
 class Particle:
@@ -20,10 +20,10 @@ class Particle:
          ])*0.1
     arrow_size = 0.1
 
-    def __init__(self, map: Map = None, pose=(0, 0, 0), weight: float = 1.0) -> None:
+    def __init__(self, map: Map = None, pose=(0, 0, 0), weight: float = 1.0, default_landmark_settings: LandmarkSettings = LandmarkSettings()) -> None:
         if map is None:
             # Brand new particle being created: prepare new everything
-            self.map = Map()
+            self.map = Map(default_landmark_settings=default_landmark_settings)
             self.pose = np.array(pose)  # np.random.uniform(low=-1, high=1, size=3)
             self.weight = 1.0
             return

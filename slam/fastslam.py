@@ -30,7 +30,7 @@ class FastSLAM:
     def __init__(self, settings: FastSLAMSettings = FastSLAMSettings(), ax: plt.Axes = None) -> None:
         self.settings: FastSLAMSettings = settings
         self.action_model = lambda pose, odometry: action_model(pose, odometry, self.settings.action_model_settings)
-        self.particles: list[Particle] = [Particle() for _ in range(settings.num_particles)]
+        self.particles: list[Particle] = [Particle(default_landmark_settings=settings.landmark_settings) for _ in range(settings.num_particles)]
         self.particle_markers = [None]*settings.num_particles
         self.n_gain = np.diag([settings.r_std, settings.phi_std])
 

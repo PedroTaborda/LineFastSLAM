@@ -105,20 +105,20 @@ class Landmark(EKF):
 
 # print(f"[WARNING] Map code does not behave as Map.")
 class Map:
-    def __init__(self) -> None:
+    def __init__(self, default_landmark_settings: LandmarkSettings = LandmarkSettings()) -> None:
         self.landmarks: dict[int, Landmark] = {}
+        self.default_landmark_settings = default_landmark_settings
 
     def update(self, obs: Observation):
         if obs.landmark_id not in self.landmarks:
             x0 = obs.h_inv(obs.z)
             Dhn = obs.get_Dhn(x0)
             Dhx_inv = np.linalg.inv(obs.get_Dhx(x0))
-            self.landmarks[obs.landmark_id] = Landmark(
-                LandmarkSettings(
-                    mu0=x0,
-                    cov0=Dhx_inv @ Dhn @ Dhn.T @ Dhx_inv.T
-                )
-            )
+            landmark_settings = copy.copy(self.default_landmark_settings)
+            landmark_settings.mu0 = x0
+            landmark_settings.cov0 = Dhx_inv @ Dhn @ Dhn.T @ Dhx_inv.T
+
+            self.landmarks[obs.landmark_id] = Landmark(landmark_settings)
             return 1.0
         else:
             self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
