@@ -220,7 +220,7 @@ if __name__ == '__main__':
 
     if args.rosbag:
         sensor_data = rosbag_to_data(args.rosbag)
-        lst = args.rosbag.split('.')
+        lst = os.path.basename(args.rosbag).split('.')
         lst[-1] = lst[-1].replace('bag', 'xz', 1)
         sensor_data.save('.'.join(lst))
         print('Saved to', '.'.join(lst))
