@@ -20,7 +20,7 @@ class FastSLAMSettings:
     num_particles: int = 100
     action_model_settings: ActionModelSettings = ActionModelSettings()
     landmark_settings: LandmarkSettings = LandmarkSettings()
-    resampling_type: ResampleType = ResampleType.UNIFORM
+    resampling_type: ResampleType = ResampleType.LOW_VARIANCE
     r_std: float = 0.05
     phi_std: float = 3*np.pi/180
     visualize: bool = False
@@ -55,9 +55,8 @@ class FastSLAM:
         Args:
             odometry: The odometry data as a numpy array of [dx, dy, dtheta]
         """
-        old_particles = copy.copy(self.particles)
         action = lambda pose: self.action_model(pose, odometry)
-        self.resample()
+
         for i in range(len(self.particles)):
             self.particles[i].apply_action(action)
 
@@ -147,8 +146,9 @@ class FastSLAM:
 
         if self.settings.trajectory_trail:
             pose_estimate = self.pose_estimate()
-            prev_traj_actual = self.actual_trajectory_trail.get_data(orig=True)
-            self.actual_trajectory_trail.set_data(list(prev_traj_actual[0]) + [actual_location[0]], list(prev_traj_actual[1]) + [actual_location[1]])
+            if actual_location is not None:
+                prev_traj_actual = self.actual_trajectory_trail.get_data(orig=True)
+                self.actual_trajectory_trail.set_data(list(prev_traj_actual[0]) + [actual_location[0]], list(prev_traj_actual[1]) + [actual_location[1]])
             prev_traj_est = self.estimated_trajectory_trail.get_data(orig=True)
             self.estimated_trajectory_trail.set_data(list(prev_traj_est[0]) + [pose_estimate[0]], list(prev_traj_est[1]) + [pose_estimate[1]])
         
