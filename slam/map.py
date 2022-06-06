@@ -97,6 +97,12 @@ class Landmark(EKF):
         # Plot latest observation
         self.z_handle.set(offsets=z)
 
+    def _undraw(self):
+        if self.drawn:
+            self.drawn = False
+            self.std_ellipse.remove()
+            self.z_handle.remove()
+
     def __del__(self):
         if self.drawn:
             self.std_ellipse.remove()
@@ -130,6 +136,11 @@ class Map:
     def _draw(self, ax, **plot_kwargs):
         for landmark_id in self.landmarks:
             self.landmarks[landmark_id]._draw(ax, **plot_kwargs)
+
+    def _undraw(self):
+        for landmark_id in self.landmarks:
+            self.landmarks[landmark_id]._undraw()
+
 
     def copy(self):
         return copy.copy(self)

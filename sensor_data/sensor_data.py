@@ -31,9 +31,13 @@ class SimulationData:
 
 @dataclass
 class SensorData:
-    odometry: list[tuple[int, np.ndarray]]        # (timestamp, [theta, x, y])
-    lidar: list[tuple[int, np.ndarray]]           # (timestamp, [phi, r])
-    camera: list[tuple[int, list[tuple[int, np.ndarray]]]]           # (timestamp, list[id, [phi, r]])
+    odometry: list[tuple[int, np.ndarray]]                  # (timestamp, [theta, x, y])
+    lidar: list[tuple[int, np.ndarray]]                     # (timestamp, [phi, r])
+    # camera is: (timestamp, list[id, [phi, r]], CompressedImg)
+    # decompress example: Img = cv2.imdecode(CompressedImg, cv2.IMREAD_COLOR)
+    camera: list[tuple[int, list[tuple[int, np.ndarray]], np.ndarray]]
+
+
     comment: str = ''
     from_rosbag: bool = False
     sim_data: SimulationData = None
@@ -81,7 +85,7 @@ def detect_landmarks(image: np.ndarray, camera_matrix: np.ndarray, distortion_co
 
         # Use the position of the markers to get the distance and difference in heading to the robot
         distance = np.linalg.norm(translation)
-        angle = np.rad2deg(np.arctan(-translation[0]/translation[2]))
+        angle = np.arctan(-translation[0]/translation[2])
         angles.append(angle)
         distances.append(distance)
 
@@ -101,13 +105,15 @@ def detect_landmarks(image: np.ndarray, camera_matrix: np.ndarray, distortion_co
 
         cv2.putText(image, f'd: {distance:.3f}', (topLeft[0] - 50, topLeft[1] - 30), cv2.FONT_HERSHEY_SIMPLEX,
                     0.5, (0, 255, 0), 2)
-        cv2.putText(image, f'angle: {angle:.1f}', (topLeft[0] - 50, topLeft[1] - 15), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5, (0, 255, 0), 2)
+        cv2.putText(
+            image, f'angle: {np.rad2deg(angle):.1f}', (topLeft[0] - 50, topLeft[1] - 15),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),
+            2)
 
-    return (image, list(zip([id[0] for id in ids], [(distance, np.deg2rad(angle)) for angle, distance in zip(angles, distances)])))
+    return (image, list(zip([id[0] for id in ids], [(distance, angle) for angle, distance in zip(angles, distances)])))
 
 
-def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
+def rosbag_to_data(rosbag_path: os.PathLike, save_imgs=False) -> SensorData:
     laser_ros = []
     odom_ros = []
     cam_ros_sim = []
@@ -138,7 +144,7 @@ def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
         if len(connections_odom) != 0:
             for connection, timestamp, rawdata in reader.messages(connections=connections_odom):
                 msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
-                theta, x, y = msg.pose.pose.orientation.z*180.0/np.pi, msg.pose.pose.position.x, msg.pose.pose.position.y
+                theta, x, y = msg.pose.pose.orientation.z, msg.pose.pose.position.x, msg.pose.pose.position.y
                 odom_ros.append((timestamp, np.array([theta, x, y])))
         if len(connections_cam_sim) != 0:
             raise NotImplementedError('Camera on simulation not implemented')
@@ -154,8 +160,12 @@ def rosbag_to_data(rosbag_path: os.PathLike) -> SensorData:
             for connection, timestamp, rawdata in reader.messages(connections=connections_cam):
                 msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
                 img = cv2.imdecode(msg.data, cv2.IMREAD_COLOR)
-                _, landmarks = detect_landmarks(img, camera_matrix, distortion_coefficients)
-                cam_ros_real.append((timestamp, landmarks))
+                annotated_img, landmarks = detect_landmarks(img, camera_matrix, distortion_coefficients)
+                Compressed_Annotated = None
+                if save_imgs:
+                    Compressed_Annotated = cv2.imencode('.jpeg', annotated_img)[1]
+                cam_ros_real.append((timestamp, landmarks, Compressed_Annotated))
+
 
     return SensorData(odometry=odom_ros, lidar=laser_ros, camera=cam_ros_real, comment='From rosbag', from_rosbag=True)
 
@@ -215,11 +225,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Convert sensor data from rosbag to sensor data')
     parser.add_argument('--rosbag', type=str, help='Path to rosbag file', required=True)
+    parser.add_argument('--save_images', action="store_true")
 
     args = parser.parse_args()
 
     if args.rosbag:
-        sensor_data = rosbag_to_data(args.rosbag)
+        sensor_data = rosbag_to_data(args.rosbag, args.save_images)
         lst = os.path.basename(args.rosbag).split('.')
         lst[-1] = lst[-1].replace('bag', 'xz', 1)
         sensor_data.save('.'.join(lst))

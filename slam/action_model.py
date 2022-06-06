@@ -13,7 +13,7 @@ class UncertaintyType(Enum):
 
 @dataclass
 class ActionModelSettings:
-    uncertainty_type: UncertaintyType = UncertaintyType.POSE_ADD
+    uncertainty_type: UncertaintyType = UncertaintyType.ODOM_MULT
 
     POSE_ADD_MU: np.ndarray = np.zeros((3,))
     POSE_ADD_COV: np.ndarray = np.square(np.diag([0.01, 0.01, 0.5*np.pi/180]))

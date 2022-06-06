@@ -93,7 +93,8 @@ class FastSLAM:
         """Resamples the particles based on their weights.
         """
         weights = np.array([particle.weight for particle in self.particles])
-        self.particles = self.settings.resampling_type(self.particles, weights, self.settings.num_particles)
+        if any(weights - weights[0] != 0):
+            self.particles = self.settings.resampling_type(self.particles, weights, self.settings.num_particles)
 
     def pose_estimate(self) -> np.ndarray:
         """Returns the estimated location of the robot.
@@ -122,6 +123,7 @@ class FastSLAM:
     # Visualization methods (if settings.visualize is True)
     def _init_visualizer(self, ylim: tuple=(-3, 3), xlim: tuple=(-3, 3)) -> None:
         self.actual_location_dot: PathCollection = self.ax.scatter(0, 0, marker='x', c='k', alpha=0.0)
+        self.drawn_map_estimate = self.particles[0].map  # guess map just to avoid initializing to None
         self.ax.set_xlim(*xlim)
         self.ax.set_ylim(*ylim)
 
@@ -156,8 +158,12 @@ class FastSLAM:
 
     def _draw_map(self) -> None:
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
-        map_estimate: Map = self.particles[particle_idx_for_map].map
-        map_estimate._draw(self.ax, color_ellipse='C01', color_p='C01', color_z='C01')
+        new = self.particles[particle_idx_for_map].map
+        if self.drawn_map_estimate is not new:
+            self.drawn_map_estimate._undraw()
+            self.drawn_map_estimate = new
+
+        self.drawn_map_estimate._draw(self.ax, color_ellipse='C01', color_p='C01', color_z='C01')
         self._draw()
 
     def _draw(self) -> None:

@@ -78,7 +78,8 @@ if __name__=="__main__":
             odometry, camera, lidar = sensor.sample_sensors()
             timestamp_ns = time.time_ns()
             odometry_data += [(timestamp_ns, odometry)]
-            camera_data += [(timestamp_ns, camera)]
+            img = None
+            camera_data += [(timestamp_ns, camera, img)]
             lidar_data += [(timestamp_ns, lidar)]
 
         # Check if we have to draw
