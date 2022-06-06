@@ -144,7 +144,31 @@ def rosbag_to_data(rosbag_path: os.PathLike, save_imgs=False) -> SensorData:
         if len(connections_odom) != 0:
             for connection, timestamp, rawdata in reader.messages(connections=connections_odom):
                 msg = rosbags.serde.deserialize_cdr(rosbags.serde.ros1_to_cdr(rawdata, connection.msgtype), connection.msgtype)
-                theta, x, y = msg.pose.pose.orientation.z, msg.pose.pose.position.x, msg.pose.pose.position.y
+                def euler_from_quaternion(x, y, z, w):
+                    import math
+                    """
+                    Convert a quaternion into euler angles (roll, pitch, yaw)
+                    roll is rotation around x in radians (counterclockwise)
+                    pitch is rotation around y in radians (counterclockwise)
+                    yaw is rotation around z in radians (counterclockwise)
+                    """
+                    t0 = +2.0 * (w * x + y * z)
+                    t1 = +1.0 - 2.0 * (x * x + y * y)
+                    roll_x = math.atan2(t0, t1)
+                
+                    t2 = +2.0 * (w * y - z * x)
+                    t2 = +1.0 if t2 > +1.0 else t2
+                    t2 = -1.0 if t2 < -1.0 else t2
+                    pitch_y = math.asin(t2)
+                
+                    t3 = +2.0 * (w * z + x * y)
+                    t4 = +1.0 - 2.0 * (y * y + z * z)
+                    yaw_z = math.atan2(t3, t4)
+                
+                    return roll_x, pitch_y, yaw_z # in radians
+                theta, x, y = euler_from_quaternion(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y,
+                              msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)[2], \
+                              msg.pose.pose.position.x, msg.pose.pose.position.y
                 odom_ros.append((timestamp, np.array([theta, x, y])))
         if len(connections_cam_sim) != 0:
             raise NotImplementedError('Camera on simulation not implemented')
