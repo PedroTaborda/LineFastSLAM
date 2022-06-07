@@ -76,18 +76,23 @@ def detect_landmarks(image: np.ndarray, camera_matrix: np.ndarray, distortion_co
 
     angles = []
     distances = []
+    orientations = []
     for cornerset in corners:
         LA  = 0.083     # Physical size of the aruco markers. Should be an input parameter
 
         # Estimate the position of the aruco markers in world coordinates
-        _, translation, _ = cv2.aruco.estimatePoseSingleMarkers(cornerset, LA, camera_matrix, distortion_coefficents)
+        rotation, translation, _ = cv2.aruco.estimatePoseSingleMarkers(cornerset, LA, camera_matrix, distortion_coefficents)
         translation = translation.squeeze()
+        rotation_matrix, _ = cv2.Rodrigues(rotation)
+        normal_vector = rotation_matrix @ np.array([0, 0, 1])
+        orientation = np.arctan2(normal_vector[2], normal_vector[0])
 
         # Use the position of the markers to get the distance and difference in heading to the robot
         distance = np.linalg.norm(translation)
         angle = np.arctan(-translation[0]/translation[2])
         angles.append(angle)
         distances.append(distance)
+        orientations.append(orientation)
 
         # Draw the aruco markers on the image
         corners = cornerset.reshape((4, 2))
@@ -110,7 +115,7 @@ def detect_landmarks(image: np.ndarray, camera_matrix: np.ndarray, distortion_co
             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),
             2)
 
-    return (image, list(zip([id[0] for id in ids], [(distance, angle) for angle, distance in zip(angles, distances)])))
+    return (image, list(zip([id[0] for id in ids], [(distance, angle, orientation) for angle, distance, orientation in zip(angles, distances, orientations)])))
 
 
 def rosbag_to_data(rosbag_path: os.PathLike, save_imgs=False) -> SensorData:
