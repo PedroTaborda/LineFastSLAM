@@ -62,7 +62,10 @@ class Sensor:
         robot_heading = robot_state[0]
 
         # Check which landmarks are within the robot's camera field of view.
-        for landmark_id, landmark_position in self.map.landmarks.items():
+        for landmark_id, landmark_state in self.map.landmarks.items():
+            landmark_position = landmark_state[0:2]
+            landmark_orientation = landmark_state[2]
+            
             # Offset the landmark to the robot's coordinate frame
             landmark_relative_position = landmark_position - robot_position
             landmark_relative_angle = np.rad2deg(np.arctan2(landmark_relative_position[1], landmark_relative_position[0])) - robot_heading
@@ -71,11 +74,13 @@ class Sensor:
             landmark_relative_angle = landmark_relative_angle + 360 if landmark_relative_angle < -180 else landmark_relative_angle
             landmark_relative_angle = landmark_relative_angle - 360 if landmark_relative_angle > 180 else landmark_relative_angle
 
+            landmark_relative_orientation = landmark_orientation - robot_heading
+
             # Determines if the landmark is in the camera's field of view and range
             is_in_fov = landmark_relative_angle > - self.camera_fov / 2 and landmark_relative_angle < self.camera_fov / 2
             is_in_range = landmark_relative_distance < self.camera_range
             if is_in_fov and is_in_range:
-                observed_landmarks += [(landmark_id, np.array([landmark_relative_distance, np.deg2rad(landmark_relative_angle)]))]
+                observed_landmarks += [(landmark_id, np.array([landmark_relative_distance, np.deg2rad(landmark_relative_angle), np.deg2rad(landmark_relative_orientation)]))]
         
         return observed_landmarks
         
