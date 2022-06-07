@@ -77,13 +77,19 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     Img = cv2.imdecode(CmpImg, cv2.IMREAD_COLOR)
                     cam_ax.imshow(cv2.cvtColor(Img, cv2.COLOR_BGR2RGB))
                 for id, z in landmarks:
-                    r, theta = z
-                    slammer.make_observation(t, (id, np.array([r, theta])))
+                    r, theta, psi = z
+                    #slammer.make_unoriented_observation(t, (id, np.array([r, theta])))
+                    slammer.make_oriented_observation(t, (id, np.array([r, theta, psi])))
             elif it == 2:  # Odometry data incoming
                 k += 1
                 theta0, x0, y0 = data.odometry[k-1][1]
                 theta1, x1, y1 = data.odometry[k][1]
                 odom = np.array([np.sqrt((x1-x0)**2 + (y1-y0)**2), (theta1-theta0)]).squeeze()
+                if odom[1] < -np.pi:
+                    odom[1] += 2*np.pi
+                elif odom[1] > np.pi:
+                    odom[1] -= 2*np.pi
+
                 slammer.resample()
                 if data.sim_data is not None:
                     slammer.perform_action(t, odom, actual_pose)

@@ -11,7 +11,6 @@ from matplotlib.patches import Ellipse
 from ekf.ekf import EKF, EKFSettings
 from visualization_utils.mpl_video import to_video
 
-
 @dataclass
 class LandmarkSettings(EKFSettings):
     """Settings for the EKF representing a landmark.
@@ -27,12 +26,41 @@ class LandmarkSettings(EKFSettings):
     get_Dgx: callable = lambda x, u: np.eye(2)
     get_Dgm: callable = lambda x, u: np.zeros((2, 2))
 
+@dataclass
+class UnorientedLandmarkSettings(LandmarkSettings):
+    """Settings for the EKF representing a landmark.
+    
+    A landmark is represented by its position in the xy plane, as well as an orientation.
+    By default, there is a linear measurement model, but this can be
+    changed by setting the `h` and `Dh_` functions at measurement time.
+    """
+    mu0: np.ndarray = np.array([0, 0])
+    cov0: np.ndarray = np.square(np.diag([0.1, 0.1]))  # also wrong but enough for now
+    min_cov: np.ndarray = np.square(np.diag([0.01, 0.01]))
+    g: callable = lambda x, u, m: x
+    get_Dgx: callable = lambda x, u: np.eye(2)
+    get_Dgm: callable = lambda x, u: np.zeros((2, 2))
+
+@dataclass
+class OrientedLandmarkSettings(LandmarkSettings):
+    """Settings for the EKF representing a landmark.
+    
+    A landmark is represented by its position in the xy plane, as well as an orientation.
+    By default, there is a linear measurement model, but this can be
+    changed by setting the `h` and `Dh_` functions at measurement time.
+    """
+    mu0: np.ndarray = np.array([0, 0, 0])
+    cov0: np.ndarray = np.square(np.diag([0.1, 0.1, 0.05]))  # also wrong but enough for now
+    min_cov: np.ndarray = np.square(np.diag([0.01, 0.01, 0.01]))
+    g: callable = lambda x, u, m: x
+    get_Dgx: callable = lambda x, u: np.eye(3)
+    get_Dgm: callable = lambda x, u: np.zeros((3, 3))
+
 
 r = 0.2  # std_dev of default linear observation model
 
-
 @dataclass
-class Observation():
+class UnorientedObservation():
     """ Observation of a landmark.
     Observation model:
         z = h(x, n)
@@ -51,6 +79,26 @@ class Observation():
     get_Dhx: callable = lambda x, n: np.eye(2)
     get_Dhn: callable = lambda x, n: r * np.eye(2)
 
+@dataclass
+class OrientedObservation():
+    """ Observation of a landmark.
+    Observation model:
+        z = h(x, n)
+        where
+        x - landmark position (unknown)
+        n - multi-normal observation noise with identity covariance matrix,
+                0 mean and same dimensions as z
+        z - observations (known)
+
+        h - invertible and differentiable function
+    """
+    landmark_id: int = 0
+    z: np.ndarray = np.array([0, 0, 0])
+    h: callable = lambda x, n: x + r * np.eye(3) @ n
+    h_inv: callable = lambda z: z
+    get_Dhx: callable = lambda x, n: np.eye(3)
+    get_Dhn: callable = lambda x, n: r * np.eye(3)
+
 class Landmark(EKF):
     def __init__(self, settings: LandmarkSettings):
         super().__init__(settings)
@@ -64,6 +112,63 @@ class Landmark(EKF):
     def update(self, zx): # zx is z with x coords
         super().update(self.h(zx, np.zeros_like(zx)))
         self.latest_zx = zx
+
+    def _undraw(self):
+        if self.drawn:
+            self.drawn = False
+            self.std_ellipse.remove()
+            self.z_handle.remove()
+
+    def __del__(self):
+        if self.drawn:
+            self.std_ellipse.remove()
+            self.z_handle.remove()
+
+class OrientedLandmark(Landmark):
+    def __init__(self, settings: OrientedLandmarkSettings):
+        super().__init__(settings)
+        self.drawn = False
+        self.confidence_interval = 0.99 # draw ellipse for this confidence interval
+        self.latest_zx = None
+        
+    def _draw(self, ax, actual_pos: np.ndarray=None, color_ellipse='C00', color_p='C01', color_z='C02'):
+        """Draw the landmark on the given matplotlib axis.
+
+        This drawing includes an ellipse which is the level curve of the
+        probability distribution of the landmark for p=confidence_interval.
+        It also includes a marker for the mean of this distribution and another
+        for the latest observation.
+        """
+        if self.latest_zx is None:
+            return
+        p = self.get_mu()
+        z = self.latest_zx
+        if not self.drawn:
+            self.drawn = True    
+            self.std_ellipse: Ellipse = Ellipse((0, 0), 1, 1, facecolor='none', edgecolor=color_ellipse)
+            ax.add_patch(self.std_ellipse)
+            self.z_handle: PathCollection = ax.scatter(z[0], z[1], marker='1', c=color_z)
+
+        # number of std's to include in confidence ellipse
+        n_stds = -scipy.stats.norm.ppf((1-self.confidence_interval)/2)
+
+        # Plot ellipse
+        self.std_ellipse.set_center(self.get_mu()[0:2])
+        [w, v] = np.linalg.eig(self.get_cov()[0:2, 0:2])
+        self.std_ellipse.set_width(np.sqrt(w[0])*n_stds*2)
+        self.std_ellipse.set_height(np.sqrt(w[1])*n_stds*2)
+        angle_deg = math.atan2(v[1, 0], v[0, 0]) * 180/np.pi
+        self.std_ellipse.set_angle(angle_deg)
+
+        # Plot latest observation
+        self.z_handle.set(offsets=z[0:2])
+
+class UnorientedLandmark(Landmark):
+    def __init__(self, settings: UnorientedLandmarkSettings):
+        super().__init__(settings)
+        self.drawn = False
+        self.confidence_interval = 0.99 # draw ellipse for this confidence interval
+        self.latest_zx = None
         
     def _draw(self, ax, actual_pos: np.ndarray=None, color_ellipse='C00', color_p='C01', color_z='C02'):
         """Draw the landmark on the given matplotlib axis.
@@ -97,25 +202,13 @@ class Landmark(EKF):
         # Plot latest observation
         self.z_handle.set(offsets=z)
 
-    def _undraw(self):
-        if self.drawn:
-            self.drawn = False
-            self.std_ellipse.remove()
-            self.z_handle.remove()
-
-    def __del__(self):
-        if self.drawn:
-            self.std_ellipse.remove()
-            self.z_handle.remove()
-
-
 # print(f"[WARNING] Map code does not behave as Map.")
-class Map:
-    def __init__(self, default_landmark_settings: LandmarkSettings = LandmarkSettings()) -> None:
+class OrientedMap:
+    def __init__(self, default_landmark_settings: OrientedLandmarkSettings = OrientedLandmarkSettings()) -> None:
         self.landmarks: dict[int, Landmark] = {}
         self.default_landmark_settings = default_landmark_settings
 
-    def update(self, obs: Observation):
+    def update(self, obs: OrientedObservation):
         if obs.landmark_id not in self.landmarks:
             x0 = obs.h_inv(obs.z)
             Dhn = obs.get_Dhn(x0)
@@ -124,7 +217,7 @@ class Map:
             landmark_settings.mu0 = x0
             landmark_settings.cov0 = Dhx_inv @ Dhn @ Dhn.T @ Dhx_inv.T
 
-            self.landmarks[obs.landmark_id] = Landmark(landmark_settings)
+            self.landmarks[obs.landmark_id] = OrientedLandmark(landmark_settings)
             return 1.0
         else:
             self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
@@ -152,7 +245,7 @@ if __name__ == '__main__':
     rng = np.random.default_rng(0)
 
     # Create a map
-    map = Map()
+    map = OrientedMap()
 
     # Create a figure
     fig, ax = plt.subplots(1, 1)
@@ -254,12 +347,12 @@ if __name__ == '__main__':
 
         # make an observation with noise
         z = h(x_real_landmark_0, rng.normal(size=(2,)))
-        obs1 = Observation(landmark_id=0, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
+        obs1 = UnorientedObservation(landmark_id=0, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
         map.update(obs1)
 
         # make an observation with noise
         z = h(x_real_landmark_1, rng.normal(size=(2,)))
-        obs2 = Observation(landmark_id=1, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
+        obs2 = UnorientedObservation(landmark_id=1, z=z, h=h, h_inv=h_inv, get_Dhx=get_Dhx, get_Dhn=get_Dhn)
         map.update(obs2)
 
         map._draw(ax)

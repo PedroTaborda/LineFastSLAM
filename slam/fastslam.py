@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PathCollection
 
-from slam.map import LandmarkSettings, Map, Observation
+from slam.map import OrientedLandmarkSettings, OrientedMap, OrientedObservation
 from slam.action_model import ActionModelSettings, action_model
 from slam.resampling import ResampleType
 from slam.particle import Particle
@@ -19,10 +19,12 @@ class FastSLAMSettings:
     """
     num_particles: int = 100
     action_model_settings: ActionModelSettings = ActionModelSettings()
-    landmark_settings: LandmarkSettings = LandmarkSettings()
+    landmark_settings: OrientedLandmarkSettings = OrientedLandmarkSettings()
+    map_type: type = type(OrientedMap)
     resampling_type: ResampleType = ResampleType.LOW_VARIANCE
     r_std: float = 0.05
     phi_std: float = 3*np.pi/180
+    psi_std: float = 5*np.pi/180
     visualize: bool = False
     trajectory_trail: bool = False
 
@@ -32,9 +34,9 @@ class FastSLAM:
         self.action_model = lambda pose, odometry: action_model(pose, odometry, self.settings.action_model_settings)
         self.particles: list[Particle] = [Particle(default_landmark_settings=settings.landmark_settings) for _ in range(settings.num_particles)]
         self.particle_markers = [None]*settings.num_particles
-        self.n_gain = np.diag([settings.r_std, settings.phi_std])
+        self.n_gain = np.diag([settings.r_std, settings.phi_std, settings.psi_std])
 
-        self.map_estimate: Map = None
+        self.map_estimate: settings.map_type = None
 
         # Contains the estimated location of the robot as a list of (time, [x, y, theta])
         self.trajectory_estimate: list[tuple[int, np.ndarray]] = []
@@ -71,15 +73,33 @@ class FastSLAM:
         if t < self.cur_time:
             print(f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
 
-    def make_observation(self, t: float, obs_data: tuple[int, tuple[float, float]]) -> None:
+    def make_unoriented_observation(self, t: float, obs_data: tuple[int, tuple[float, float]]) -> None:
         """Updates all particles' maps using the observation data, and 
         reweighs the particles based on the likelihood of the observation.
 
         Args:
-            observation: The observation data as a tuple of (id, [r (m), phi (rad)])
+            observation: The observation data as a tuple of (id, [r (m), phi (rad), psi(rad)])
         """
         for particle in self.particles:
-            particle.make_observation(obs_data, self.n_gain)
+            particle.make_unoriented_observation(obs_data, self.n_gain[0:2, 0:2])
+
+        self._normalize_particle_weights()
+        if self.settings.visualize:
+            self._draw_map()
+        _ = 1 # for debug purposes
+
+        if t < self.cur_time:
+            print(f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
+
+    def make_oriented_observation(self, t: float, obs_data: tuple[int, tuple[float, float, float]]) -> None:
+        """Updates all particles' maps using the observation data, and 
+        reweighs the particles based on the likelihood of the observation.
+
+        Args:
+            observation: The observation data as a tuple of (id, [r (m), phi (rad), psi(rad)])
+        """
+        for particle in self.particles:
+            particle.make_oriented_observation(obs_data, self.n_gain)
 
         self._normalize_particle_weights()
         if self.settings.visualize:
@@ -104,14 +124,14 @@ class FastSLAM:
         """
         return np.array([particle.pose for particle in self.particles]).mean(axis=0)
 
-    def map_estimate(self) -> Map:
+    def map_estimate(self) -> OrientedMap:
         """Returns the map of the robot.
 
         Returns:
             The map of the robot.
         """
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
-        map_estimate: Map = self.particles[particle_idx_for_map].map
+        map_estimate: OrientedMap = self.particles[particle_idx_for_map].map
         return map_estimate
     
     def _normalize_particle_weights(self) -> None:
@@ -179,7 +199,7 @@ if __name__ == '__main__':
         num_particles=1,
         action_model_settings=ActionModelSettings(
         ),
-        landmark_settings=LandmarkSettings(
+        landmark_settings=OrientedLandmarkSettings(
         ),
         resampling_type=ResampleType.UNIFORM,
         visualize=True
@@ -200,6 +220,6 @@ if __name__ == '__main__':
         slam.perform_action(time.time()-t0, movement, cur_loc)
 
     def observe(id, position):
-        slam.make_observation(time.time()-t0, (id, position))
+        slam.make_unoriented_observation(time.time()-t0, (id, position))
     act([0.0, 0.0])
     observe(0, [0.0, 0.0])
