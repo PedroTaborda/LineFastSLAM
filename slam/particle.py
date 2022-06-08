@@ -60,7 +60,9 @@ class Particle:
             point_on_line_world = R @ np.array([rh_robot * np.cos(th_robot), rh_robot * np.sin(th_robot)]) + p
             rh_world = point_on_line_world.dot(np.array([np.cos(th_world), np.sin(th_world)]))
             x = rh_world, th_world
-            return x
+            if rh_world < 0:
+                x = -rh_world, np.mod(th_world + np.pi, 2*np.pi) - np.pi
+            return np.array(x)
 
         observed_landmarks = self.map.landmarks
         observed_lines_keys = [landmark for landmark in observed_landmarks if landmark < 0]
@@ -88,8 +90,10 @@ class Particle:
             th_robot = np.mod(th_world - theta, 2*np.pi) - np.pi
             point_on_line_robot = R.T @ (np.array([rh_world * np.cos(th_world), rh_world * np.sin(th_world)]) - p)
             rh_robot = point_on_line_robot.dot(np.array([np.cos(th_robot), np.sin(th_robot)]))
-            z = np.array([rh_robot, th_robot])
-            return z + n
+            z = [rh_robot, th_robot]
+            if rh_robot < 0:
+                z = [-rh_robot, np.mod(th_robot + np.pi, 2*np.pi) - np.pi]
+            return np.array(z) + n
 
 
         def get_Dhx(x):
