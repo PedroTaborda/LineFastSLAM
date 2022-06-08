@@ -78,7 +78,7 @@ class Particle:
         if try_to_match:
             max_likelihood, best_key = 0, 0
             for key in try_to_match:
-                likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]))
+                likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]), diff = lambda t1, t2 : np.mod(t1 - t2, 2*np.pi) - np.pi)
                 if likelihood > max_likelihood:
                     max_likelihood, best_key = likelihood, key
             landmark_id = best_key
@@ -114,7 +114,7 @@ class Particle:
             get_Dhx=get_Dhx,
             get_Dhn=get_Dhn
         )
-        self.weight *= self.map.update(obs)
+        self.weight *= self.map.update(obs, diff = lambda t1, t2 : np.mod(t1 - t2, 2*np.pi) - np.pi)
         
     def make_unoriented_observation(self, obs_data: tuple[int, tuple[float, float]], n_gain: np.ndarray) -> None:
         """Make an observation of a landmark on the map.
