@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PathCollection
 
-from slam.map import OrientedLandmarkSettings, OrientedMap, OrientedObservation
+from slam.map import OrientedLandmarkSettings, Map, Observation
 from slam.action_model import ActionModelSettings, action_model
 from slam.resampling import ResampleType
 from slam.particle import Particle
@@ -20,7 +20,7 @@ class FastSLAMSettings:
     num_particles: int = 100
     action_model_settings: ActionModelSettings = ActionModelSettings()
     landmark_settings: OrientedLandmarkSettings = OrientedLandmarkSettings()
-    map_type: type = type(OrientedMap)
+    map_type: type = type(Map)
     resampling_type: ResampleType = ResampleType.LOW_VARIANCE
     r_std: float = 0.05
     phi_std: float = 3*np.pi/180
@@ -109,6 +109,25 @@ class FastSLAM:
         if t < self.cur_time:
             print(f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
             
+    def make_line_observation(self, t: float, obs_data: tuple[int, tuple[float, float]]) -> None:
+        """Updates all particles' maps using the observation data, and 
+        reweighs the particles based on the likelihood of the observation.
+
+        Args:
+            observation: The observation data as a tuple of (id, [rh (m), th (rad)])
+                    representing a line in the map.
+        """
+        for particle in self.particles:
+            particle.make_line_observation(obs_data, self.n_gain)
+
+        self._normalize_particle_weights()
+        if self.settings.visualize:
+            self._draw_map()
+        _ = 1 # for debug purposes
+
+        if t < self.cur_time:
+            print(f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
+            
     def resample(self) -> None:
         """Resamples the particles based on their weights.
         """
@@ -124,14 +143,14 @@ class FastSLAM:
         """
         return np.array([particle.pose for particle in self.particles]).mean(axis=0)
 
-    def map_estimate(self) -> OrientedMap:
+    def map_estimate(self) -> Map:
         """Returns the map of the robot.
 
         Returns:
             The map of the robot.
         """
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
-        map_estimate: OrientedMap = self.particles[particle_idx_for_map].map
+        map_estimate: Map = self.particles[particle_idx_for_map].map
         return map_estimate
     
     def _normalize_particle_weights(self) -> None:

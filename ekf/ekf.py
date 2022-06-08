@@ -94,7 +94,11 @@ class EKF:
 
         dist = scipy.stats.multivariate_normal(mean=zhat_mu, cov=total_cov)
 
-        return dist.pdf(z)
+        p = dist.pdf(z)
+        if p == 0:
+            print("[WARNING] Likelihood is 0")
+            return 0.00001
+        return p
 
     def get_mu(self) -> np.ndarray:
         return self.mu

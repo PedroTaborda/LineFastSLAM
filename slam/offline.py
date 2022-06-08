@@ -9,6 +9,7 @@ import cv2
 import slam.fastslam as fs
 import sensor_data.sensor_data as sd
 import usim.umap
+from slam.lidar_lines import identify_lines
 
 
 def there_is_data(data: sd.SensorData, idx_lidar, idx_camera, idx_odometry):
@@ -59,16 +60,22 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 it = np.argmin(next_times())
                 t = next_times()[it]/1e9
 
-            if data.sim_data is not None and show_images:
+            if data.sim_data is not None:
                 sim_i = round(t/ts)
                 if sim_i >= sim_N:
                     break
                 actual_pose = data.sim_data.robot_pose[sim_i]
-                estimated_pose = slammer.pose_estimate()
 
             t0 = time.time()
             if it == 0:  # Lidar data incoming
                 i += 1
+                scan = data.lidar[i][1]
+                if data.sim_data is not None: # TODO: fix this (lidar out of range returning max range - should be 0)
+                    scan[scan > 3.49] = 0.0
+                lines = identify_lines(scan)
+                for line in lines:
+                    #slammer.make_line_observation(t, (None, line))
+                    ...
             elif it == 1:  # Camera data incoming
                 j += 1
                 _, landmarks, CmpImg = data.camera[j]
