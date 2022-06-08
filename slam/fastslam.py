@@ -118,7 +118,7 @@ class FastSLAM:
                     representing a line in the map.
         """
         for particle in self.particles:
-            particle.make_line_observation(obs_data, self.n_gain)
+            particle.make_line_observation(obs_data, self.n_gain[0:2, 0:2])
 
         self._normalize_particle_weights()
         if self.settings.visualize:

@@ -51,7 +51,7 @@ class Particle:
 
         rh, th = obs_data[1]
         p = np.array([px, py])
-        R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+        R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
         pr = R.T @ p
         
         def h_inv(z):
@@ -72,7 +72,7 @@ class Particle:
         for key in observed_lines_keys:
             rh_observed_world, th_observed_world = self.map.landmarks[key].get_mu()
             xmark_observed = np.array([rh_observed_world*np.cos(th_observed_world), rh_observed_world*np.sin(th_observed_world)])
-            if np.linalg.norm(xmark_observed - xmark) < 0.3: # TODO: make this a parameter (it means only try matching close landmarks)
+            if np.linalg.norm(xmark_observed - xmark) < 1: # TODO: make this a parameter (it means only try matching close landmarks)
                 try_to_match.append(key)
 
         if try_to_match:
@@ -85,6 +85,7 @@ class Particle:
         else:
             landmark_id = min(observed_lines_keys) - 1 if observed_lines_keys else -1
 
+
         def h(x, n):
             rh_world, th_world = x
             th_robot = np.mod(th_world - theta, 2*np.pi) - np.pi
@@ -93,7 +94,7 @@ class Particle:
             z = [rh_robot, th_robot]
             if rh_robot < 0:
                 z = [-rh_robot, np.mod(th_robot + np.pi, 2*np.pi) - np.pi]
-            return np.array(z) + n
+            return np.array(z) + n_gain @ n
 
 
         def get_Dhx(x):
@@ -103,10 +104,7 @@ class Particle:
             return dhx
 
         def get_Dhn(x):
-            dhx = np.eye(2)
-            dhx[0, 0] = np.cos(x[1] - theta)
-            dhx[0, 1] = pr[1] * np.cos(x[1] - theta) - (x[0] + pr[0]) * np.sin(x[1] - theta)
-            return dhx
+            return n_gain
 
         obs = LineObservation(
             landmark_id=landmark_id,
