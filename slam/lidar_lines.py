@@ -93,31 +93,35 @@ if __name__ == "__main__":
     from sensor_data.sensor_data import SensorData, load_sensor_data
     import matplotlib.pyplot as plt
 
-    sd: SensorData = load_sensor_data("corridor-w-light.xz")
-    ex_scan = sd.lidar[500][1] # index [i][0] contains the timestamp
-    ex_scan[ex_scan > 3.49] = 0.0
-
-    good = np.where(ex_scan > 0.01)[0] 
-    angles = good.astype(float)*np.pi/180
-    cleaned_scan = ex_scan[good]
-    xypoints = (np.array([np.cos(angles), np.sin(angles)]) * cleaned_scan).T
-
+    plt.ion()
     plt.figure()
-    plt.plot(xypoints[:, 0], xypoints[:, 1], "o", label="Lidar scan")
-    lines = identify_lines(ex_scan, plot=True)
+    sd: SensorData = load_sensor_data("corridor-w-light.xz")
+    for instant in sd.lidar:
+        ex_scan = instant[1]
+        #ex_scan = sd.lidar[500][1] # index [i][0] contains the timestamp
+        ex_scan[ex_scan > 3.49] = 0.0
 
-    def plot_line(rh, th, label, color):
-        direction = np.array([np.sin(th), -np.cos(th)])
-        x0 = rh*np.array([np.cos(th), np.sin(th)])
-        p = np.array([x0 - rh*2*direction, x0 + rh*2*direction])
-        print(f"rh, th = {rh}, {th}")
-        print(f"{p=}")
-        plt.plot(p[:, 0], p[:, 1], label=label, color=color)
-    
-    # Plot the lidar scan and the identified lines.
-    for idx, (rh, th) in enumerate(lines):
-        plt.plot([0, rh*np.cos(th)], [0, rh*np.sin(th)], "--", color=f'C0{idx+3}')
-        plot_line(rh, th, label = f"line {idx}", color=f'C0{idx+3}')
+        good = np.where(ex_scan > 0.01)[0] 
+        angles = good.astype(float)*np.pi/180
+        cleaned_scan = ex_scan[good]
+        xypoints = (np.array([np.cos(angles), np.sin(angles)]) * cleaned_scan).T
 
-    plt.legend()
-    plt.show()
+        plt.clf()        
+        plt.plot(xypoints[:, 0], xypoints[:, 1], "o", label="Lidar scan")
+        lines = identify_lines(ex_scan, plot=True)
+
+        def plot_line(rh, th, label, color):
+            direction = np.array([np.sin(th), -np.cos(th)])
+            x0 = rh*np.array([np.cos(th), np.sin(th)])
+            p = np.array([x0 - rh*2*direction, x0 + rh*2*direction])
+            print(f"rh, th = {rh}, {th}")
+            print(f"{p=}")
+            plt.plot(p[:, 0], p[:, 1], label=label, color=color)
+        
+        # Plot the lidar scan and the identified lines.
+        for idx, (rh, th) in enumerate(lines):
+            plt.plot([0, rh*np.cos(th)], [0, rh*np.sin(th)], "--", color=f'C0{idx+3}')
+            plot_line(rh, th, label = f"line {idx}", color=f'C0{idx+3}')
+
+        plt.pause(0.01)
+        plt.show()
