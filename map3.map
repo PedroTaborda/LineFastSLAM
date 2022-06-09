@@ -1,0 +1,51 @@
+# <cmd> <args>
+# ex:
+# landmark <id> <x> <y> <angular orientation>
+
+landmark 0 0.0 0.950 0
+landmark 1 0.0 2.420 0
+landmark 2 1.460 2.270 180
+landmark 3 0.0 4.750 0
+landmark 4 1.460 4.770 180
+landmark 5 1.460 6.800 180
+landmark 6 0.0 7.600 0
+landmark 7 1.460 9.070 180
+landmark 8 0.0 10.050 0
+landmark 9 1.460 10.850 180
+landmark 10 0.0 12.350 0
+landmark 11 1.460 12.620 180
+landmark 12 0.0 14.270 0
+landmark 13 0.370 14.700 -90
+landmark 14 1.490 14.610 -90
+landmark 15 1.610 12.960 90
+landmark 16 1.900 13.200 180
+
+# ex:
+# waypoint <id> <x> <y>
+
+waypoint 0 0.880 -0.080
+waypoint 1 0.530 0.950
+waypoint 2 1.180 1.800
+waypoint 3 0.780 2.300
+waypoint 4 0.920 3.450
+waypoint 5 1.140 4.510
+waypoint 6 0.750 4.990
+waypoint 7 0.730 5.960
+waypoint 8 1.050 6.710
+waypoint 9 0.760 7.540
+waypoint 10 0.700 8.300
+waypoint 11 1.080 9.050
+waypoint 12 0.870 9.920
+waypoint 13 0.570 10.680
+waypoint 14 99.0 1123.0
+waypoint 15 90.0 1235.0
+waypoint 16 52.0 1324.0
+waypoint 17 108.0 1360.0
+waypoint 18 49.0 1483.0
+waypoint 19 121.0 1494.0
+waypoint 20 135.0 1425.0
+
+
+
+
+

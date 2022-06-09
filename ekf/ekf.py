@@ -62,7 +62,7 @@ class EKF:
 
         self._check_cov()
 
-    def update(self, z):
+    def update(self, z, diff=lambda x, y: x - y):
         zero_m = np.zeros_like(self.mu)
         zero_n = np.zeros_like(self.h(self.mu, zero_m))
         # Get sensitivity to uncertainty
@@ -72,13 +72,13 @@ class EKF:
         S = Dhx @ self.cov @ Dhx.T + Dhn @ Dhn.T
         K = self.cov @ Dhx.T @ np.linalg.inv(S)
         # Update expected value
-        self.mu = self.mu + K @ (z - self.h(self.mu, zero_n))
+        self.mu = self.mu + K @ diff(z, self.h(self.mu, zero_n))
         # Predict uncertainty
         self.cov = self.cov - K @ Dhx @ self.cov
 
         self._check_cov()
 
-    def get_likelihood(self, z):
+    def get_likelihood(self, z, diff=lambda x, y: x - y):
         zero_m = np.zeros_like(self.mu)
         zero_n = np.zeros_like(self.h(self.mu, zero_m))
         # Get sensitivity to uncertainty
@@ -92,9 +92,9 @@ class EKF:
 
         total_cov = zhat_cov + Dhn @ Dhn.T
 
-        dist = scipy.stats.multivariate_normal(mean=zhat_mu, cov=total_cov)
+        dist = scipy.stats.multivariate_normal(mean=zero_n, cov=total_cov)
 
-        p = dist.pdf(z)
+        p = dist.pdf(diff(z, zhat_mu))
         if p == 0:
             print("[WARNING] Likelihood is 0")
             return 0.00001

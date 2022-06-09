@@ -43,6 +43,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     if data.sim_data is not None:
         actual_map: usim.umap.UsimMap = data.sim_data.map
         for landmark_id in actual_map.landmarks:
+            break
             axes.scatter(actual_map.landmarks[landmark_id][0], actual_map.landmarks[landmark_id][1], c='k', marker='*')
 
         sim_i = 0
@@ -76,7 +77,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     scan[scan > 3.49] = 0.0
                 lines = identify_lines(scan)
                 for line in lines:
-                    #slammer.make_line_observation(t, (None, line))
+                    slammer.make_line_observation(t, (None, line))
                     ...
             elif it == 1:  # Camera data incoming
                 j += 1
@@ -97,7 +98,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     continue
                 theta0, x0, y0 = data.odometry[k-1][1]
                 theta1, x1, y1 = data.odometry[k][1]
-                odom = np.array([np.sqrt((x1-x0)**2 + (y1-y0)**2), (theta1-theta0)]).squeeze()
+                diff = np.array([x1-x0, y1-y0]).flatten().dot(np.array([np.cos(theta0), np.sin(theta0)]).flatten())
+                odom = np.array([np.sqrt((x1-x0)**2 + (y1-y0)**2)*np.sign(diff), (theta1-theta0)]).squeeze()
                 if odom[1] < -np.pi:
                     odom[1] += 2*np.pi
                 elif odom[1] > np.pi:
@@ -111,6 +113,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
 
                 if images_dir is not None:
                     plt.savefig(os.path.join(images_dir, f"{k:06d}.png"))
+            
     except KeyboardInterrupt:
         print('\nKeyboard interrupt. Exiting...')
     finally:

@@ -81,8 +81,8 @@ class Landmark(EKF):
     def predict(self):
         super().predict(u=0)
 
-    def update(self, zx): # zx is z with x coords
-        super().update(self.h(zx, np.zeros_like(zx)))
+    def update(self, zx, **kwargs): # zx is z with x coords
+        super().update(self.h(zx, np.zeros_like(zx)), **kwargs)
         self.latest_zx = zx
 
     def _undraw(self):
@@ -280,7 +280,7 @@ class Map:
     def __init__(self) -> None:
         self.landmarks: dict[int, Landmark] = {}
 
-    def update(self, obs: Observation):
+    def update(self, obs: Observation, diff = lambda x, y: x-y):
         if obs.landmark_id not in self.landmarks:
             x0 = obs.h_inv(obs.z)
             Dhn = obs.get_Dhn(x0)
@@ -294,9 +294,9 @@ class Map:
             return 1.0
         else:
             self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
-            likelyhood = self.landmarks[obs.landmark_id].get_likelihood(obs.z)
+            likelyhood = self.landmarks[obs.landmark_id].get_likelihood(obs.z, diff=diff)
             self.landmarks[obs.landmark_id].predict()
-            self.landmarks[obs.landmark_id].update(obs.h_inv(obs.z))
+            self.landmarks[obs.landmark_id].update(obs.h_inv(obs.z), diff=diff)
             return likelyhood
 
     def _draw(self, ax, **plot_kwargs):

@@ -118,7 +118,7 @@ class FastSLAM:
                     representing a line in the map.
         """
         for particle in self.particles:
-            particle.make_line_observation(obs_data, self.n_gain)
+            particle.make_line_observation(obs_data, self.n_gain[0:2, 0:2])
 
         self._normalize_particle_weights()
         if self.settings.visualize:
@@ -141,7 +141,7 @@ class FastSLAM:
         Returns:
             The estimated location of the robot as a numpy array of [x, y, theta]
         """
-        return np.array([particle.pose for particle in self.particles]).mean(axis=0)
+        return np.sum([particle.pose*particle.weight for particle in self.particles], axis=0)/np.sum([particle.weight for particle in self.particles])
 
     def map_estimate(self) -> Map:
         """Returns the map of the robot.
