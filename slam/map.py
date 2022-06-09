@@ -3,6 +3,7 @@ from enum import Enum
 import math
 import copy
 import os
+from matplotlib.lines import Line2D
 
 import scipy.stats
 import numpy as np
@@ -171,27 +172,28 @@ class LineLandmark(Landmark):
         """
         if self.latest_zx is None:
             return
-        p = self.get_mu()
-        z = self.latest_zx
+        mu = self.get_mu()
+        rh, th = mu
+        direction = np.array([np.sin(th), -np.cos(th)])
+        x0 = rh*np.array([np.cos(th), np.sin(th)])
+        points = np.array([x0 - direction, x0 + direction])
+
         if not self.drawn:
             self.drawn = True    
-            self.std_ellipse: Ellipse = Ellipse((0, 0), 1, 1, facecolor='none', edgecolor=color_ellipse)
-            ax.add_patch(self.std_ellipse)
-            self.z_handle: PathCollection = ax.scatter(z[0], z[1], marker='1', c=color_z)
-
-        # number of std's to include in confidence ellipse
-        n_stds = -scipy.stats.norm.ppf((1-self.confidence_interval)/2)
-
-        # Plot ellipse
-        self.std_ellipse.set_center(self.get_mu())
-        [w, v] = np.linalg.eig(self.get_cov())
-        self.std_ellipse.set_width(np.sqrt(w[0])*n_stds*2)
-        self.std_ellipse.set_height(np.sqrt(w[1])*n_stds*2)
-        angle_deg = math.atan2(v[1, 0], v[0, 0]) * 180/np.pi
-        self.std_ellipse.set_angle(angle_deg)
+            self.z_handle: Line2D = ax.plot(points[:, 0], points[:, 1], c=color_z)[0]
 
         # Plot latest observation
-        self.z_handle.set(offsets=z)
+        self.z_handle.set_xdata(points[:, 0])
+        self.z_handle.set_ydata(points[:, 1])
+
+    def _undraw(self):
+        if self.drawn:
+            self.drawn = False
+            self.z_handle.remove()
+
+    def __del__(self):
+        if self.drawn:
+            self.z_handle.remove()
 
 class LandmarkType(Enum):
     """Type of observation."""
