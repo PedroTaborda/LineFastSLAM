@@ -69,6 +69,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             t0 = time.time()
             if it == 0:  # Lidar data incoming
                 i += 1
+                if t < 20:
+                    continue
                 scan = data.lidar[i][1]
                 if data.sim_data is not None: # TODO: fix this (lidar out of range returning max range - should be 0)
                     scan[scan > 3.49] = 0.0
@@ -78,6 +80,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     ...
             elif it == 1:  # Camera data incoming
                 j += 1
+                if t < 20:
+                    continue
                 _, landmarks, CmpImg = data.camera[j]
                 if CmpImg is not None:
                     cam_ax.clear()
@@ -89,6 +93,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     slammer.make_oriented_observation(t, (id, np.array([r, theta, psi])))
             elif it == 2:  # Odometry data incoming
                 k += 1
+                if t < 20:
+                    continue
                 theta0, x0, y0 = data.odometry[k-1][1]
                 theta1, x1, y1 = data.odometry[k][1]
                 odom = np.array([np.sqrt((x1-x0)**2 + (y1-y0)**2), (theta1-theta0)]).squeeze()
