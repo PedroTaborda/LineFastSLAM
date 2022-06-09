@@ -1,7 +1,9 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
 from slam.ransac import RANSAC, RansacModel
+from visualization_utils.mpl_video import to_video
 
 class StraightLineModel(RansacModel):
     def __init__(self, threshold: float = 0.02):
@@ -87,7 +89,6 @@ def identify_lines(scan: np.ndarray, plot: bool = False) -> np.ndarray:
 
     return lines
 
-
 if __name__ == "__main__":
     # Read a SensorData object from a file to extract lidar scan data to test the lidar scanner.
     from sensor_data.sensor_data import SensorData, load_sensor_data
@@ -96,6 +97,10 @@ if __name__ == "__main__":
     plt.ion()
     plt.figure()
     sd: SensorData = load_sensor_data("corridor-w-light.xz")
+    imgs_dir = os.path.join('images', 'ransac')
+    if not os.path.isdir(imgs_dir):
+        os.mkdir(imgs_dir)
+
     for instant in sd.lidar:
         ex_scan = instant[1]
         #ex_scan = sd.lidar[500][1] # index [i][0] contains the timestamp
@@ -124,4 +129,7 @@ if __name__ == "__main__":
             plot_line(rh, th, label = f"line {idx}", color=f'C0{idx+3}')
 
         plt.pause(0.01)
+        plt.savefig(os.path.join(imgs_dir,f"lidar_scan_{instant[0]}.png"))
         plt.show()
+
+    to_video(imgs_dir, "lidar_scan.mp4")

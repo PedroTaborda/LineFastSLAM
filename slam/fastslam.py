@@ -141,7 +141,7 @@ class FastSLAM:
         Returns:
             The estimated location of the robot as a numpy array of [x, y, theta]
         """
-        return np.array([particle.pose for particle in self.particles]).mean(axis=0)
+        return np.sum([particle.pose*particle.weight for particle in self.particles], axis=0)/np.sum([particle.weight for particle in self.particles])
 
     def map_estimate(self) -> Map:
         """Returns the map of the robot.

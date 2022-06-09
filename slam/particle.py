@@ -56,7 +56,7 @@ class Particle:
         
         def h_inv(z):
             rh_robot, th_robot = z
-            th_world = np.mod(th_robot + theta, 2*np.pi) - np.pi
+            th_world = np.mod(th_robot + theta + np.pi, 2*np.pi) - np.pi
             point_on_line_world = R @ np.array([rh_robot * np.cos(th_robot), rh_robot * np.sin(th_robot)]) + p
             rh_world = point_on_line_world.dot(np.array([np.cos(th_world), np.sin(th_world)]))
             x = rh_world, th_world
@@ -64,31 +64,13 @@ class Particle:
                 x = -rh_world, np.mod(th_world + np.pi, 2*np.pi) - np.pi
             return np.array(x)
 
-        observed_landmarks = self.map.landmarks
-        observed_lines_keys = [landmark for landmark in observed_landmarks if landmark < 0]
-        rh_world, th_world = h_inv(np.array([rh, th]))
-        xmark = np.array([rh_world*np.cos(th_world), rh_world*np.sin(th_world)])
-        try_to_match = []
-        for key in observed_lines_keys:
-            rh_observed_world, th_observed_world = self.map.landmarks[key].get_mu()
-            xmark_observed = np.array([rh_observed_world*np.cos(th_observed_world), rh_observed_world*np.sin(th_observed_world)])
-            if np.linalg.norm(xmark_observed - xmark) < 1: # TODO: make this a parameter (it means only try matching close landmarks)
-                try_to_match.append(key)
-
-        if try_to_match:
-            max_likelihood, best_key = 0, 0
-            for key in try_to_match:
-                likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]), diff = lambda t1, t2 : np.mod(t1 - t2, 2*np.pi) - np.pi)
-                if likelihood > max_likelihood:
-                    max_likelihood, best_key = likelihood, key
-            landmark_id = best_key
-        else:
-            landmark_id = min(observed_lines_keys) - 1 if observed_lines_keys else -1
-
+        def diff(rh_th1, rh_th2):
+            return np.array([rh_th1[0] - rh_th2[0], np.mod(rh_th1[1] - rh_th2[1] + np.pi, 2*np.pi) - np.pi])
+            
 
         def h(x, n):
             rh_world, th_world = x
-            th_robot = np.mod(th_world - theta, 2*np.pi) - np.pi
+            th_robot = np.mod(th_world - theta + np.pi, 2*np.pi) - np.pi
             point_on_line_robot = R.T @ (np.array([rh_world * np.cos(th_world), rh_world * np.sin(th_world)]) - p)
             rh_robot = point_on_line_robot.dot(np.array([np.cos(th_robot), np.sin(th_robot)]))
             z = [rh_robot, th_robot]
@@ -99,12 +81,37 @@ class Particle:
 
         def get_Dhx(x):
             dhx = np.eye(2)
-            dhx[0, 0] = np.cos(x[1] - theta)
-            dhx[0, 1] = pr[1] * np.cos(x[1] - theta) - (x[0] + pr[0]) * np.sin(x[1] - theta)
+            direction = - np.sign(p.dot(np.array([np.cos(x[1]), np.sin(x[1])])) - x[0])
+            rho, alpha = np.linalg.norm(p), np.arctan2(p[1], p[0])
+            dhx[0, 0] = direction
+            dhx[0, 1] = rho * np.sin(x[1] - alpha + (- direction + 1) / 2 * np.pi)
             return dhx
 
         def get_Dhn(x):
             return n_gain
+
+        observed_landmarks = self.map.landmarks
+        observed_lines_keys = [landmark for landmark in observed_landmarks if landmark < 0]
+        rh_world, th_world = h_inv(np.array([rh, th]))
+        xmark = np.array([rh_world*np.cos(th_world), rh_world*np.sin(th_world)])
+        try_to_match = []
+        # print(f"{observed_lines_keys}")
+        for key in observed_lines_keys:
+            rh_observed_world, th_observed_world = self.map.landmarks[key].get_mu()
+            xmark_observed = np.array([rh_observed_world*np.cos(th_observed_world), rh_observed_world*np.sin(th_observed_world)])
+            if np.linalg.norm(xmark_observed - xmark) < 1: # TODO: make this a parameter (it means only try matching close landmarks)
+                try_to_match.append(key)
+
+        if try_to_match:
+            max_likelihood, best_key = 0, 0
+            for key in try_to_match:
+                self.map.landmarks[key].set_sensor_model(h, get_Dhx, get_Dhn)
+                likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]), diff = diff)
+                if likelihood > max_likelihood:
+                    max_likelihood, best_key = likelihood, key
+            landmark_id = best_key
+        else:
+            landmark_id = min(observed_lines_keys) - 1 if observed_lines_keys else -1
 
         obs = LineObservation(
             landmark_id=landmark_id,
@@ -114,7 +121,7 @@ class Particle:
             get_Dhx=get_Dhx,
             get_Dhn=get_Dhn
         )
-        self.weight *= self.map.update(obs, diff = lambda t1, t2 : np.mod(t1 - t2, 2*np.pi) - np.pi)
+        self.weight *= self.map.update(obs, diff = diff)
         
     def make_unoriented_observation(self, obs_data: tuple[int, tuple[float, float]], n_gain: np.ndarray) -> None:
         """Make an observation of a landmark on the map.
