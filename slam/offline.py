@@ -16,6 +16,23 @@ def there_is_data(data: sd.SensorData, idx_lidar, idx_camera, idx_odometry):
     return idx_lidar < len(data.lidar) or idx_camera < len(data.camera) or idx_odometry < len(data.odometry)
 
 
+def plot_pc(pc_axes, scan: np.ndarray, pose: np.ndarray):
+    ''' Adds new scan to point cloud map. 
+    
+        Args: 
+            scan - (360,) radius of each degree from 0 to 359
+            pose - (3,) robot pose, x, y and theta
+    '''
+    px, py, theta = pose
+    good = np.where(scan > 0.01)[0]
+    angles = good.astype(float)*np.pi/180
+    cleaned_scan = scan[good]
+    points_x = np.cos(angles + theta) * cleaned_scan + px
+    points_y = np.sin(angles + theta) * cleaned_scan + py
+    pc_axes.scatter(points_x, points_y, s=0.1, marker='.', c='#000000', zorder=-10)
+
+
+
 def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(),
                      images_dir=None, realtime: bool = False, show_images: bool = False):
     if slam_settings.visualize is False:
@@ -25,6 +42,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
         fig, (axes, cam_ax) = plt.subplots(2, 1, figsize=(10, 5))
     else:
         fig, axes = plt.subplots(1, 1, figsize=(10, 5), sharex=True, sharey=True)
+
+    #_, pc_ax = plt.subplots(1, 1, figsize=(10, 5))  # point cloud axes
     axes: plt.Axes
     slammer = fs.FastSLAM(slam_settings, axes)
     i = j = -1
@@ -70,7 +89,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             t0 = time.time()
             if it == 0:  # Lidar data incoming
                 i += 1
-                if t < 20:
+                if t < 20 and data.sim_data is None:
                     continue
                 scan = data.lidar[i][1]
                 if data.sim_data is not None: # TODO: fix this (lidar out of range returning max range - should be 0)
@@ -78,13 +97,14 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 lines = identify_lines(scan)
                 for line in lines:
                     slammer.make_line_observation(t, (None, line))
-                    ...
+                plot_pc(axes, scan, slammer.pose_estimate())
+
             elif it == 1:  # Camera data incoming
                 j += 1
-                if t < 20:
+                if t < 20 and data.sim_data is None:
                     continue
                 _, landmarks, CmpImg = data.camera[j]
-                if CmpImg is not None:
+                if CmpImg is not None and show_images:
                     cam_ax.clear()
                     Img = cv2.imdecode(CmpImg, cv2.IMREAD_COLOR)
                     cam_ax.imshow(cv2.cvtColor(Img, cv2.COLOR_BGR2RGB))
@@ -94,7 +114,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     slammer.make_oriented_observation(t, (id, np.array([r, theta, psi])))
             elif it == 2:  # Odometry data incoming
                 k += 1
-                if t < 20:
+                if t < 20 and data.sim_data is None:
                     continue
                 theta0, x0, y0 = data.odometry[k-1][1]
                 theta1, x1, y1 = data.odometry[k][1]
