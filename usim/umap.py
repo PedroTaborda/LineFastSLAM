@@ -10,7 +10,8 @@ import numpy as np
 class UsimMap:
     landmarks: TypedDict('Landmark', {'id': int, 'position': np.ndarray})
 
-    lines: list = None
+    # List[tuple[x0, y0, x1, y1]] each line is represented by two points on the line
+    lines: list[tuple[float, float, float, float]] = None
 
     def __post_init__(self):
         self.lines = self.compute_lines()
