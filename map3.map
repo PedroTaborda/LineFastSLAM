@@ -4,21 +4,25 @@
 
 landmark 0 0.0 0.950 0
 landmark 1 0.0 2.420 0
-landmark 2 1.460 2.270 180
-landmark 3 0.0 4.750 0
-landmark 4 1.460 4.770 180
-landmark 5 1.460 6.800 180
-landmark 6 0.0 7.600 0
-landmark 7 1.460 9.070 180
-landmark 8 0.0 10.050 0
-landmark 9 1.460 10.850 180
-landmark 10 0.0 12.350 0
-landmark 11 1.460 12.620 180
-landmark 12 0.0 14.270 0
-landmark 13 0.370 14.700 -90
-landmark 14 1.490 14.610 -90
-landmark 15 1.610 12.960 90
-landmark 16 1.900 13.200 180
+landmark 2 0.0 4.750 0
+landmark 3 0.0 7.600 0
+landmark 4 0.0 10.050 0
+landmark 5 0.0 12.350 0
+landmark 6 0.0 14.270 0
+landmark 8 1.490 14.610 -90
+landmark 7 0.370 14.700 -90
+
+
+
+
+landmark 13 1.460 2.270 180
+landmark 14 1.460 4.770 180
+landmark 15 1.460 6.800 180
+landmark 15 1.460 9.070 180
+landmark 16 1.460 10.850 180
+landmark 17 1.460 12.620 180
+landmark 18 1.610 12.960 90
+landmark 19 1.900 13.200 90
 
 # ex:
 # waypoint <id> <x> <y>
