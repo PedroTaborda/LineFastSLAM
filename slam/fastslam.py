@@ -48,6 +48,9 @@ class FastSLAM:
             else:
                 self.ax = ax
             self._init_visualizer()
+            self.last_estimated_pose = None
+            self.last_actual_location = None
+            plt.show(block=False)
 
         self.cur_time: float = 0
 
@@ -176,8 +179,8 @@ class FastSLAM:
         self.ax.plot([-x, x, x, -x], [-x, -x, x, x], c='k', linewidth=0)
 
         if self.settings.trajectory_trail:
-            self.actual_trajectory_trail, = self.ax.plot([], [], c='C03', linewidth=0.5, label='Actual Trajectory')
-            self.estimated_trajectory_trail, = self.ax.plot([], [], c='C04', linewidth=0.5, label='Estimated trajectory')
+            self.actual_trajectory_trail = [] # , = self.ax.plot([], [], c='C03', linewidth=0.5, label='Actual Trajectory')
+            self.estimated_trajectory_trail = [] #, = self.ax.plot([], [], c='C04', linewidth=0.5, label='Estimated trajectory')
 
     def _draw_location(self, actual_location: np.ndarray = None) -> None:
         for idx, particle in enumerate(self.particles):
@@ -187,13 +190,50 @@ class FastSLAM:
 
         if self.settings.trajectory_trail:
             pose_estimate = self.pose_estimate()
-            if actual_location is not None:
-                prev_traj_actual = self.actual_trajectory_trail.get_data(orig=True)
-                self.actual_trajectory_trail.set_data(list(prev_traj_actual[0]) + [actual_location[0]], list(prev_traj_actual[1]) + [actual_location[1]])
-            prev_traj_est = self.estimated_trajectory_trail.get_data(orig=True)
-            self.estimated_trajectory_trail.set_data(list(prev_traj_est[0]) + [pose_estimate[0]], list(prev_traj_est[1]) + [pose_estimate[1]])
+            
+            if actual_location is not None and self.last_actual_location is not None:
+                l = self.ax.plot([self.last_actual_location[0], actual_location[0]], [self.last_actual_location[1], actual_location[1]], c='C03', linewidth=0.5)
+                self.actual_trajectory_trail.append(l[0])
+            
+            if self.last_estimated_pose is not None:
+                l = self.ax.plot([self.last_estimated_pose[0], pose_estimate[0]], [self.last_estimated_pose[1], pose_estimate[1]], c='C04', linewidth=0.5)
+                self.estimated_trajectory_trail.append(l[0])
+            
+            self.last_actual_location = actual_location
+            self.last_estimated_pose = pose_estimate
+
+        # when a lot of lines accumulate, the figure gets slow to update,
+        # therefore every 10 lines, their xdata and ydata are joined together
+        if len(self.actual_trajectory_trail) > 10:
+            at_lines = self.actual_trajectory_trail
+            oldx = []
+            oldy = []
+            for l in at_lines:
+                oldx += [num for num in l.get_xdata()[:-1]]
+                oldy += [num for num in l.get_ydata()[:-1]]
+            oldx = np.array(oldx)
+            oldy = np.array(oldy)
+            new_l = self.ax.plot(oldx, oldy, c='C03', linewidth=0.5)[0]
+            for l in at_lines:
+                l.remove()
+            self.actual_trajectory_trail = [new_l]
+
+        if len(self.estimated_trajectory_trail) > 10:
+            et_lines = self.estimated_trajectory_trail
+            oldx = []
+            oldy = []
+            for l in et_lines:
+                oldx += [num for num in l.get_xdata()[:-1]]
+                oldy += [num for num in l.get_ydata()[:-1]]
+            oldx = np.array(oldx)
+            oldy = np.array(oldy)
+            new_l = self.ax.plot(oldx, oldy, c='C04', linewidth=0.5)[0]
+            for l in et_lines:
+                l.remove()
+            self.estimated_trajectory_trail = [new_l]
         
         self._draw()
+
 
     def _draw_map(self) -> None:
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
@@ -209,7 +249,6 @@ class FastSLAM:
         # self.ax.relim()
         self.ax.autoscale_view(False,True,True)
         plt.pause(0.01)
-        plt.show(block=False)
 
 if __name__ == '__main__':
     from math import *
