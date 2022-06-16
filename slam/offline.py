@@ -92,7 +92,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 if t < 20 and data.sim_data is None:
                     continue
                 scan = data.lidar[i][1]
-                if data.sim_data is not None: # TODO: fix this (lidar out of range returning max range - should be 0)
+                if data.sim_data is not None:  # TODO: re run sims and delete this code
                     scan[scan > 3.49] = 0.0
                 lines = identify_lines(scan)
                 for line in lines:
@@ -118,12 +118,12 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     continue
                 theta0, x0, y0 = data.odometry[k-1][1]
                 theta1, x1, y1 = data.odometry[k][1]
-                diff = np.array([x1-x0, y1-y0]).flatten().dot(np.array([np.cos(theta0), np.sin(theta0)]).flatten())
-                odom = np.array([np.sqrt((x1-x0)**2 + (y1-y0)**2)*np.sign(diff), (theta1-theta0)]).squeeze()
-                if odom[1] < -np.pi:
-                    odom[1] += 2*np.pi
-                elif odom[1] > np.pi:
-                    odom[1] -= 2*np.pi
+                diff = np.array([x1-x0, y1-y0]).flatten()
+                # Rotate to frame of odom0 to use only relative info
+                R = np.array([[np.cos(-theta0), -np.sin(-theta0)], [np.sin(-theta0), np.cos(-theta0)]]).squeeze()
+                diff = R @ diff
+                odom = np.block([diff, theta1-theta0])
+                odom[2] = np.mod(odom[2] + np.pi, 2*np.pi) - np.pi
 
                 slammer.resample()
                 if data.sim_data is not None:
@@ -144,7 +144,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--not-realtime", action="store_true")
+    parser.add_argument("--realtime", action="store_true")
     parser.add_argument('--show_images', action="store_true")
     parser.add_argument("--no-visualize", action="store_true")
     parser.add_argument("--file", type=str, default='sim0.xz')
@@ -164,7 +164,7 @@ if __name__ == "__main__":
             visualize=not args.no_visualize,
             trajectory_trail=True,
         ),
-        realtime=not args.not_realtime,
+        realtime=args.realtime,
         images_dir=images_dir,
         show_images=args.show_images
     )
