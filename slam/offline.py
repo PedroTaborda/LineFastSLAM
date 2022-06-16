@@ -35,7 +35,8 @@ def plot_pc(pc_axes, scan: np.ndarray, pose: np.ndarray):
 
 
 def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(),
-                     images_dir=None, realtime: bool = False, show_images: bool = False):
+                     images_dir=None, realtime: bool = False, show_images: bool = False, stats_iter_size: int = 30,
+                     save_every: int = 1):
     if slam_settings.visualize is False:
         raise ValueError('Visualization must be enabled to use slam_sensor_data.')
 
@@ -70,8 +71,27 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
         sim_N = len(data.sim_data.robot_pose)
         ts = data.sim_data.sampling_time
 
+    t_iter_total = 0.0
+    t_sel_total = 0.0
+    t_lidar_total = 0.0
+    t_cam_total = 0.0
+    t_odom_total = 0.0
+    t_draw_total = 0.0
+    t_save_total = 0.0
+
+    
+    dt_iter = [0.0001]*stats_iter_size
+    dt_sel = [0.0001]*stats_iter_size
+    dt_lidar = [0.0001]*stats_iter_size
+    dt_camera = [0.0001]*stats_iter_size
+    dt_odometry = [0.0001]*stats_iter_size
+    dt_draw = [0.0001]*stats_iter_size
+    dt_save = [0.0001]*stats_iter_size
+
     try:
         while there_is_data(data, i+1, j+1, k+1):
+            t0_iter = time.time()
+
             if realtime:
                 last_t = t if it >= 0 else t0_ros
                 it = np.argmin(next_times())
@@ -88,6 +108,12 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 actual_pose = data.sim_data.robot_pose[sim_i]
 
             t0 = time.time()
+            t_sel = t0
+            t_lidar = t0
+            t_camera = t0
+            t_odometry = t0
+            t_draw = t0
+            t_save = t0
             if it == 0:  # Lidar data incoming
                 i += 1
                 if t < 20 and data.sim_data is None:
@@ -99,6 +125,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 for line in lines:
                     slammer.make_line_observation(t, (None, line))
                 plot_pc(axes, scan, slammer.pose_estimate())
+                t_lidar = time.time()
 
             elif it == 1:  # Camera data incoming
                 j += 1
@@ -113,6 +140,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     r, theta, psi = z
                     #slammer.make_unoriented_observation(t, (id, np.array([r, theta])))
                     slammer.make_oriented_observation(t, (id, np.array([r, theta, psi])))
+                t_camera = time.time()
             elif it == 2:  # Odometry data incoming
                 k += 1
                 if t < 20 and data.sim_data is None:
@@ -132,8 +160,45 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 else:
                     slammer.perform_action(t, odom)
 
-                if images_dir is not None:
+                t_odometry = time.time()
+
+                slammer._draw()
+                #fig.canvas.draw()
+                t_draw = time.time()
+
+                if images_dir is not None and (k % save_every == 0):
                     plt.savefig(os.path.join(images_dir, f"{k:06d}.png"))
+                
+                t_save = time.time()
+
+            if not(i and k and j):
+                continue
+            idx = (i + j + k) % stats_iter_size
+            dt_iter[idx] = time.time() - t0_iter
+            dt_sel[idx] = t_sel - t0_iter
+            dt_lidar[idx] = t_lidar - t_sel
+            dt_camera[idx] = t_camera - t_sel
+            dt_odometry[idx] = t_odometry - t_sel
+            dt_draw[idx] = t_draw - t_odometry
+            dt_save[idx] = t_save - t_draw
+
+            
+            t_iter_total = np.sum(dt_iter)
+            t_sel_total = np.sum(dt_sel)
+            t_lidar_total = np.sum(dt_lidar)
+            t_cam_total = np.sum(dt_camera)
+            t_odom_total = np.sum(dt_odometry)
+            t_draw_total = np.sum(dt_draw)
+            t_save_total = np.sum(dt_save)
+
+            t_sel_percentage = 100*t_sel_total/t_iter_total
+            t_lidar_percentage = 100*t_lidar_total/t_iter_total
+            t_cam_percentage = 100*t_cam_total/t_iter_total
+            t_odom_percentage = 100*t_odom_total/t_iter_total
+            t_draw_percentage = 100*t_draw_total/t_iter_total
+            t_save_percentage = 100*t_save_total/t_iter_total
+
+            print(f"Iteration {i+j+k:06d}: {int(1000*np.mean(dt_iter)):05d}ms - sel:{t_sel_percentage:.2f}% lidar:{t_lidar_percentage:.2f}% cam:{t_cam_percentage:.2f}% odom:{t_odom_percentage:.2f}% draw:{t_draw_percentage:.2f}% save:{t_save_percentage:.2f}%", end="\r")
             
     except KeyboardInterrupt:
         print('\nKeyboard interrupt. Exiting...')
@@ -151,6 +216,7 @@ if __name__ == "__main__":
     parser.add_argument("--file", type=str, default='sim0.xz')
     parser.add_argument("-N", type=int, default=50)
     parser.add_argument("--images-dir", type=str, default='images_slam')
+    parser.add_argument("--save-every", type=int, default=1)
 
     args = parser.parse_args()
 
@@ -170,5 +236,6 @@ if __name__ == "__main__":
         ),
         realtime=args.realtime,
         images_dir=images_dir,
-        show_images=args.show_images
+        show_images=args.show_images,
+        save_every=args.save_every,
     )
