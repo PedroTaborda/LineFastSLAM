@@ -118,11 +118,11 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     continue
                 theta0, x0, y0 = data.odometry[k-1][1]
                 theta1, x1, y1 = data.odometry[k][1]
-                diff = np.array([x1-x0, y1-y0]).flatten()
+                pos_diff = np.array([x1-x0, y1-y0]).flatten()
                 # Rotate to frame of odom0 to use only relative info
                 R = np.array([[np.cos(-theta0), -np.sin(-theta0)], [np.sin(-theta0), np.cos(-theta0)]]).squeeze()
-                diff = R @ diff
-                odom = np.block([diff, theta1-theta0])
+                pos_diff = R @ pos_diff
+                odom = np.block([pos_diff, theta1-theta0])
                 odom[2] = np.mod(odom[2] + np.pi, 2*np.pi) - np.pi
 
                 slammer.resample()
