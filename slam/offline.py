@@ -7,6 +7,7 @@ from visualization_utils.mpl_video import to_video
 import cv2
 
 import slam.fastslam as fs
+import slam.action_model as am
 import sensor_data.sensor_data as sd
 import usim.umap
 from slam.lidar_lines import identify_lines
@@ -160,6 +161,9 @@ if __name__ == "__main__":
     slam_sensor_data(
         sd.load_sensor_data(args.file),
         slam_settings=fs.FastSLAMSettings(
+            action_model_settings=am.ActionModelSettings(
+                action_type=am.ActionType.TANGENT,
+            ),
             num_particles=args.N,
             visualize=not args.no_visualize,
             trajectory_trail=True,

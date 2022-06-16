@@ -41,7 +41,7 @@ if __name__=="__main__":
 
     robot = Robot(RobotSettings(), [0, 0, 0])
     map = load_map(map_file)
-    sensor = Sensor(robot, map)
+    sensor = Sensor(robot=robot, map=map)
     odometry_data = []
     camera_data = []
     lidar_data = []

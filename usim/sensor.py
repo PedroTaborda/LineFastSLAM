@@ -3,6 +3,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+import math_extra as m
+
 from .robot import Robot
 from .umap import UsimMap
 
@@ -25,6 +27,7 @@ class Sensor:
         self.robot = robot
         self.last_odom_state = np.array([self.robot.data['theta'][-1], self.robot.data['x'][-1],
                                          self.robot.data['y'][-1]])
+        self.last_robot_state = self.last_odom_state.copy()
         self.map: UsimMap = map
 
         self.camera_fov = sensor_parameters.camera_fov
@@ -51,19 +54,23 @@ class Sensor:
 
     def odometry_measurements(self, robot_state: np.ndarray) -> np.ndarray:
         # Add relative noise to r and delta_theta measurements
-        diff = robot_state - self.last_odom_state
+        diff = robot_state - self.last_robot_state
 
-        r_factor, delta_theta_factor = np.random.multivariate_normal(
-            [1, 1],
+        r_noise, delta_theta_noise = np.random.multivariate_normal(
+            [0, 0],
             np.square(np.diag([self.odometry_r_noise_sigma, self.odometry_angular_noise_sigma]))
         )
-        delta_pos = diff[1:3]*r_factor
-        delta_theta = (np.mod(diff[0] + np.pi, 2*np.pi) - np.pi)*delta_theta_factor
-        odom = np.array([self.last_odom_state[0] + delta_theta,
-                         self.last_odom_state[1] + delta_pos[0],
-                         self.last_odom_state[2] + delta_pos[1]])
+        delta_theta = np.mod(diff[0] + np.pi, 2*np.pi) - np.pi
+        delta_theta_noisy = delta_theta*(1 + delta_theta_noise)
+        
+        delta_pos_noisy = m.R(delta_theta*delta_theta_noise) @ diff[1:3]*(1 + r_noise)
+
+        odom = np.array([self.last_odom_state[0] + delta_theta_noisy,
+                         self.last_odom_state[1] + delta_pos_noisy[0],
+                         self.last_odom_state[2] + delta_pos_noisy[1]])
 
         self.last_odom_state = odom.copy()
+        self.last_robot_state = robot_state.copy()
 
         odom[0] = np.deg2rad(odom[0])
 
