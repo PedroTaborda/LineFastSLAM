@@ -17,12 +17,14 @@ class SensorSettings:
     # Sensor noise characterization
     lidar_range_noise_sigma: float = 0          # Standard Deviation of Lidar Range Measurements
     lidar_angular_noise_sigma: float = 0        # Standard Deviation of Lidar Angular Sweep Position
-    odometry_angular_noise_sigma: float = 0     # Standard Deviation of Odometry Angular Position
-    odometry_cartesian_noise_sigma: float = 0   # Standard Deviation of Odometry Cartesian Position
+    odometry_angular_noise_sigma: float = 0.1   # Standard Deviation of Odometry Angular Displacement
+    odometry_r_noise_sigma: float = 0.1         # Standard Deviation of Odometry Distance Displacement
 
 class Sensor:
     def __init__(self, robot: Robot, map: UsimMap, sensor_parameters: SensorSettings = SensorSettings()) -> None:
         self.robot = robot
+        self.last_odom_state = np.array([self.robot.data['theta'][-1], self.robot.data['x'][-1],
+                                         self.robot.data['y'][-1]])
         self.map: UsimMap = map
 
         self.camera_fov = sensor_parameters.camera_fov
@@ -33,7 +35,7 @@ class Sensor:
         self.lidar_range_noise_sigma = sensor_parameters.lidar_range_noise_sigma
         self.lidar_angular_noise_sigma = sensor_parameters.lidar_angular_noise_sigma
         self.odometry_angular_noise_sigma = sensor_parameters.odometry_angular_noise_sigma
-        self.odometry_cartesian_noise_sigma = sensor_parameters.odometry_cartesian_noise_sigma
+        self.odometry_r_noise_sigma = sensor_parameters.odometry_r_noise_sigma
 
         self.lidar_angles = np.linspace(0.0, 360.0, num=self.lidar_angular_resolution, endpoint=False)
 
@@ -48,12 +50,24 @@ class Sensor:
         return (odometry, landmarks, lidar)
 
     def odometry_measurements(self, robot_state: np.ndarray) -> np.ndarray:
-        # Linearly add noise to the odometry measurements
-        measured_angle = robot_state[0] + np.random.normal(0.0, self.odometry_angular_noise_sigma, 1)
-        measured_x = robot_state[1] + np.random.normal(0.0, self.odometry_cartesian_noise_sigma, 1)
-        measured_y = robot_state[2] + np.random.normal(0.0, self.odometry_cartesian_noise_sigma, 1)
+        # Add relative noise to r and delta_theta measurements
+        diff = robot_state - self.last_odom_state
 
-        return np.array([np.deg2rad(measured_angle), measured_x, measured_y])
+        r_factor, delta_theta_factor = np.random.multivariate_normal(
+            [1, 1],
+            np.square(np.diag([self.odometry_r_noise_sigma, self.odometry_angular_noise_sigma]))
+        )
+        delta_pos = diff[1:3]*r_factor
+        delta_theta = (np.mod(diff[0] + np.pi, 2*np.pi) - np.pi)*delta_theta_factor
+        odom = np.array([self.last_odom_state[0] + delta_theta,
+                         self.last_odom_state[1] + delta_pos[0],
+                         self.last_odom_state[2] + delta_pos[1]])
+
+        self.last_odom_state = odom.copy()
+
+        odom[0] = np.deg2rad(odom[0])
+
+        return odom
 
     def camera_measurements(self, robot_state: np.ndarray) -> list[tuple[int, np.ndarray]]:
         observed_landmarks = []
