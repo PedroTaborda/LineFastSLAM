@@ -10,7 +10,7 @@ from .umap import UsimMap
 class SensorSettings:
     # Sensor parameters
     camera_fov: float = 62.2                    # Field of view in degrees
-    camera_range: float = 25                    # Maximum range that the camera can detect the Aruco Markers
+    camera_range: float = 2                    # Maximum range that the camera can detect the Aruco Markers
     lidar_range: float = 3.5                    # Range in meters
     lidar_angular_resolution: float = 360       # Number of points in one full sweep
 
@@ -95,36 +95,33 @@ class Sensor:
         # Prepare wall information
         for line in self.map.lines:
             xw0, yw0, xw1, yw1 = line
-            # Build the wall direction vector, which is orthogonal to the orthogonal line
+            # Build a wall direction vector, which is orthogonal to the orthogonal line
             wall_direction[0] = xw1-xw0
             wall_direction[1] = yw1-yw0
             wall_direction = wall_direction / np.linalg.norm(wall_direction)
-            # Build the orthogonal vector
+            # Build a normal vector
             orthogonal_direction = np.empty_like(wall_direction)
             orthogonal_direction[0] = -wall_direction[1]
             orthogonal_direction[1] = wall_direction[0]
 
-            # Transform the line points to the robot frame
+            # Vectors from robot position to line points
             xw0 = xw0 - x
             xw1 = xw1 - x
             yw0 = yw0 - y
             yw1 = yw1 - y
 
-            # Determine the line bias
-            c = -orthogonal_direction[0] * xw0 - orthogonal_direction[1] * yw0
+            # Determine the line position along chosen normal
+            c = orthogonal_direction[0] * xw0 + orthogonal_direction[1] * yw0
 
             # Determine the intersection point
-            xi = - orthogonal_direction[0] / (np.linalg.norm(orthogonal_direction) ** 2) * c
-            yi = - orthogonal_direction[1] / (np.linalg.norm(orthogonal_direction) ** 2) * c
+            xi = orthogonal_direction[0] * c
+            yi = orthogonal_direction[1] * c
 
             angle_0 = np.arctan2(yw0, xw0) - np.arctan2(yi, xi)
             angle_1 = np.arctan2(yw1, xw1) - np.arctan2(yi, xi)
 
-            angle_0 = angle_0 + 2*np.pi if angle_0 < -np.pi else angle_0
-            angle_1 = angle_1 + 2*np.pi if angle_1 < -np.pi else angle_1
-
-            angle_0 = angle_0 - 2*np.pi if angle_0 > np.pi else angle_0
-            angle_1 = angle_1 - 2*np.pi if angle_1 > np.pi else angle_1
+            angle_0 = np.mod(angle_0 + np.pi, 2*np.pi) - np.pi
+            angle_1 = np.mod(angle_1 + np.pi, 2*np.pi) - np.pi
 
             wall_vector += [(np.linalg.norm(np.array([xi, yi])), np.arctan2(yi, xi), \
                              min(angle_0, angle_1), max(angle_0, angle_1))]
@@ -138,8 +135,7 @@ class Sensor:
                 r, phi, min_angle, max_angle = wall
                 angle_to_orthogonal = lidar_angle - phi
 
-                angle_to_orthogonal = angle_to_orthogonal + 2*np.pi if angle_to_orthogonal < -np.pi else angle_to_orthogonal
-                angle_to_orthogonal = angle_to_orthogonal - 2*np.pi if angle_to_orthogonal > np.pi else angle_to_orthogonal
+                angle_to_orthogonal = np.mod(angle_to_orthogonal + np.pi, 2*np.pi) - np.pi
 
                 if angle_to_orthogonal < min_angle or angle_to_orthogonal > max_angle:
                     continue
@@ -154,6 +150,6 @@ class Sensor:
                 ranges[idx] = min(ranges[idx], distance_wall)
 
             if ranges[idx] == np.inf:
-                ranges[idx] = 3.5
+                ranges[idx] = 0     # means out of range
         
         return ranges 
