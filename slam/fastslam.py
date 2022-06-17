@@ -196,8 +196,8 @@ class FastSLAM:
             if actual_location is not None:
                 prev_traj_actual = self.actual_trajectory_trail.get_data(orig=True)
                 self.actual_trajectory_trail.set_data(
-                    list(prev_traj_actual[0]) + [actual_location[0]],
-                    list(prev_traj_actual[1]) + [actual_location[1]])
+                    np.append(prev_traj_actual[0], actual_location[0]),
+                    np.append(prev_traj_actual[1], actual_location[1]))
             prev_traj_est = self.estimated_trajectory_trail.get_data(orig=True)
             self.estimated_trajectory_trail.set_data(
                 list(prev_traj_est[0]) + [pose_estimate[0]],
