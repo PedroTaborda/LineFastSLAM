@@ -96,7 +96,8 @@ class EKF:
 
         p = dist.pdf(diff(z, zhat_mu))
         if p == 0:
-            print("[WARNING] Likelihood is 0")
+            # \033[<N>B moves cursor N lines down, in case cursor is not at end of console
+            print("\033[99B\r[WARNING] Likelihood is 0")
             return 0.00001
         return p
 
