@@ -1,4 +1,5 @@
 import os
+import shutil
 import time
 from matplotlib import pyplot as plt
 
@@ -40,7 +41,7 @@ def plot_pc(pc_plot_handle, scan: np.ndarray, pose: np.ndarray):
 
 def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(),
                      images_dir=None, realtime: bool = False, show_images: bool = False, stats_iter_size: int = 30,
-                     save_every: int = 1):
+                     save_every: int = 1, video_name: str = "slam"):
     if slam_settings.visualize is False:
         raise ValueError('Visualization must be enabled to use slam_sensor_data.')
 
@@ -213,8 +214,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     except KeyboardInterrupt:
         print('\nKeyboard interrupt. Exiting...')
     finally:
-        if images_dir is not None:
-            to_video(images_dir, "slam.mp4", fps=10)
+        if video_name is not None and images_dir is not None:
+            to_video(images_dir, video_name + ".mp4", fps=10)
 
 
 if __name__ == "__main__":
@@ -225,20 +226,21 @@ if __name__ == "__main__":
     parser.add_argument("--no-visualize", action="store_true")
     parser.add_argument("--file", type=str, default='sim0.xz')
     parser.add_argument("-N", type=int, default=50)
-    parser.add_argument("--images-dir", type=str, default='images_slam')
+    parser.add_argument("--video-name", type=str, default='slam')
     parser.add_argument("--save-every", type=int, default=1)
 
     args = parser.parse_args()
 
-    images_dir = os.path.join('data', args.images_dir)
-    if not os.path.isdir(images_dir):
-        os.mkdir(images_dir)
+    images_dir = os.path.join('data', args.video_name + "_tmpimgs")
+    if os.path.isdir(images_dir):
+        shutil.rmtree(images_dir)
+    os.mkdir(images_dir)
 
     slam_sensor_data(
         sd.load_sensor_data(args.file),
         slam_settings=fs.FastSLAMSettings(
             action_model_settings=am.ActionModelSettings(
-                action_type=am.ActionType.TANGENT,
+                action_type=am.ActionType.FREE,
             ),
             num_particles=args.N,
             visualize=not args.no_visualize,
@@ -248,4 +250,5 @@ if __name__ == "__main__":
         images_dir=images_dir,
         show_images=args.show_images,
         save_every=args.save_every,
+        video_name=args.video_name,
     )
