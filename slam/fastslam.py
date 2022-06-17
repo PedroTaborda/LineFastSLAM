@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import time
+import copy
 import inspect
 from dataclasses import dataclass
 
@@ -40,21 +40,14 @@ class FastSLAM:
 
         # Contains the estimated location of the robot as a list of (time, [x, y, theta])
         self.trajectory_estimate: list[tuple[int, np.ndarray]] = []
-        
+
         if settings.visualize:
             if ax is None:
-                fig, ax = plt.subplots()
+                _, ax = plt.subplots()
                 self.ax = ax
-                self.fig = fig
             else:
                 self.ax = ax
-                self.fig = ax.get_figure()
             self._init_visualizer()
-            self.last_estimated_pose = None
-            self.last_actual_location = None
-            plt.show(block=False)
-            plt.pause(0.02)
-            self.fig.canvas.draw()
 
         self.cur_time: float = 0
 
@@ -64,21 +57,22 @@ class FastSLAM:
         Args:
             odometry: The odometry data as a numpy array of [dx, dy, dtheta]
         """
-        action = lambda pose: self.action_model(pose, odometry)
+        def action(pose): return self.action_model(pose, odometry)
 
         for i in range(len(self.particles)):
             self.particles[i].apply_action(action)
 
         self.trajectory_estimate += [(t, self.pose_estimate())]
-        
+
         if actual_location is not None:
             self.trajectory_estimate += [(t, actual_location)]
 
         if self.settings.visualize:
             self._draw_location(actual_location=actual_location)
-        
+
         if t < self.cur_time:
-            print(f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
+            print(
+                f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
 
     def make_unoriented_observation(self, t: float, obs_data: tuple[int, tuple[float, float]]) -> None:
         """Updates all particles' maps using the observation data, and 
@@ -93,10 +87,11 @@ class FastSLAM:
         self._normalize_particle_weights()
         if self.settings.visualize:
             self._draw_map()
-        _ = 1 # for debug purposes
+        _ = 1  # for debug purposes
 
         if t < self.cur_time:
-            print(f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
+            print(
+                f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
 
     def make_oriented_observation(self, t: float, obs_data: tuple[int, tuple[float, float, float]]) -> None:
         """Updates all particles' maps using the observation data, and 
@@ -111,11 +106,12 @@ class FastSLAM:
         self._normalize_particle_weights()
         if self.settings.visualize:
             self._draw_map()
-        _ = 1 # for debug purposes
+        _ = 1  # for debug purposes
 
         if t < self.cur_time:
-            print(f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
-            
+            print(
+                f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
+
     def make_line_observation(self, t: float, obs_data: tuple[int, tuple[float, float]]) -> None:
         """Updates all particles' maps using the observation data, and 
         reweighs the particles based on the likelihood of the observation.
@@ -130,11 +126,12 @@ class FastSLAM:
         self._normalize_particle_weights()
         if self.settings.visualize:
             self._draw_map()
-        _ = 1 # for debug purposes
+        _ = 1  # for debug purposes
 
         if t < self.cur_time:
-            print(f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
-            
+            print(
+                f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
+
     def resample(self) -> None:
         """Resamples the particles based on their weights.
         """
@@ -148,7 +145,8 @@ class FastSLAM:
         Returns:
             The estimated location of the robot as a numpy array of [x, y, theta]
         """
-        return np.sum([particle.pose*particle.weight for particle in self.particles], axis=0)/np.sum([particle.weight for particle in self.particles])
+        return np.sum([particle.pose * particle.weight for particle in self.particles],
+                      axis=0) / np.sum([particle.weight for particle in self.particles])
 
     def map_estimate(self) -> Map:
         """Returns the map of the robot.
@@ -159,7 +157,7 @@ class FastSLAM:
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
         map_estimate: Map = self.particles[particle_idx_for_map].map
         return map_estimate
-    
+
     def _normalize_particle_weights(self) -> None:
         weights = np.array([particle.weight for particle in self.particles])
         weights = weights / weights.sum()
@@ -167,7 +165,7 @@ class FastSLAM:
             particle.weight = weights[i]
 
     # Visualization methods (if settings.visualize is True)
-    def _init_visualizer(self, ylim: tuple=(-3, 3), xlim: tuple=(-3, 3)) -> None:
+    def _init_visualizer(self, ylim: tuple = (-3, 3), xlim: tuple = (-3, 3)) -> None:
         self.actual_location_dot: PathCollection = self.ax.scatter(0, 0, marker='x', c='k', alpha=0.0)
         self.drawn_map_estimate = self.particles[0].map  # guess map just to avoid initializing to None
         self.ax.set_xlim(*xlim)
@@ -175,7 +173,7 @@ class FastSLAM:
 
         for idx, particle in enumerate(self.particles):
             self.particle_markers[idx] = self.ax.plot(0, 0, c='C00')[0]
-        
+
         self.ax.set_autoscale_on(True)
         self.ax.axes.set_aspect('equal')
 
@@ -183,8 +181,9 @@ class FastSLAM:
         self.ax.plot([-x, x, x, -x], [-x, -x, x, x], c='k', linewidth=0)
 
         if self.settings.trajectory_trail:
-            self.actual_trajectory_trail = [] # , = self.ax.plot([], [], c='C03', linewidth=0.5, label='Actual Trajectory')
-            self.estimated_trajectory_trail = [] #, = self.ax.plot([], [], c='C04', linewidth=0.5, label='Estimated trajectory')
+            self.actual_trajectory_trail, = self.ax.plot([], [], c='C03', linewidth=0.5, label='Actual Trajectory')
+            self.estimated_trajectory_trail, = self.ax.plot(
+                [], [], c='C04', linewidth=0.5, label='Estimated trajectory')
 
     def _draw_location(self, actual_location: np.ndarray = None) -> None:
         for idx, particle in enumerate(self.particles):
@@ -194,20 +193,18 @@ class FastSLAM:
 
         if self.settings.trajectory_trail:
             pose_estimate = self.pose_estimate()
-            
-            if actual_location is not None and self.last_actual_location is not None:
-                l, = self.ax.plot([self.last_actual_location[0], actual_location[0]], [self.last_actual_location[1], actual_location[1]], c='C03', linewidth=0.5, animated=False)
-                self.actual_trajectory_trail.append(l)
-                self.ax.draw_artist(l)
-            
-            if self.last_estimated_pose is not None:
-                l, = self.ax.plot([self.last_estimated_pose[0], pose_estimate[0]], [self.last_estimated_pose[1], pose_estimate[1]], c='C04', linewidth=0.5, animated=False)
-                self.estimated_trajectory_trail.append(l)
-                self.ax.draw_artist(l)
-            
-            self.last_actual_location = actual_location
-            self.last_estimated_pose = pose_estimate
-        
+            if actual_location is not None:
+                prev_traj_actual = self.actual_trajectory_trail.get_data(orig=True)
+                self.actual_trajectory_trail.set_data(
+                    list(prev_traj_actual[0]) + [actual_location[0]],
+                    list(prev_traj_actual[1]) + [actual_location[1]])
+            prev_traj_est = self.estimated_trajectory_trail.get_data(orig=True)
+            self.estimated_trajectory_trail.set_data(
+                list(prev_traj_est[0]) + [pose_estimate[0]],
+                list(prev_traj_est[1]) + [pose_estimate[1]])
+
+        self._draw()
+
     def _draw_map(self) -> None:
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
         new = self.particles[particle_idx_for_map].map
@@ -216,11 +213,13 @@ class FastSLAM:
             self.drawn_map_estimate = new
 
         self.drawn_map_estimate._draw(self.ax, color_ellipse='C01', color_p='C01', color_z='C01')
+        self._draw()
 
     def _draw(self) -> None:
         # self.ax.relim()
-        self.fig.canvas.blit(self.fig.bbox)
-        self.fig.canvas.flush_events()
+        self.ax.autoscale_view(False, True, True)
+        plt.pause(0.01)
+        plt.show(block=False)
 
 if __name__ == '__main__':
     from math import *
