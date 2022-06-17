@@ -20,7 +20,7 @@ def there_is_data(data: sd.SensorData, idx_lidar, idx_camera, idx_odometry):
     return idx_lidar < len(data.lidar) or idx_camera < len(data.camera) or idx_odometry < len(data.odometry)
 
 
-def plot_pc(pc_axes, scan: np.ndarray, pose: np.ndarray):
+def plot_pc(pc_plot_handle, scan: np.ndarray, pose: np.ndarray):
     ''' Adds new scan to point cloud map. 
 
         Args: 
@@ -31,9 +31,11 @@ def plot_pc(pc_axes, scan: np.ndarray, pose: np.ndarray):
     good = np.where(scan > 0.01)[0]
     angles = good.astype(float)*np.pi/180
     cleaned_scan = scan[good]
-    points_x = np.cos(angles + theta) * cleaned_scan + px
-    points_y = np.sin(angles + theta) * cleaned_scan + py
-    pc_axes.scatter(points_x, points_y, s=0.1, marker='.', c='#000000', zorder=-10)
+    if cleaned_scan.size > 0:
+        points_x = np.cos(angles + theta) * cleaned_scan + px
+        points_y = np.sin(angles + theta) * cleaned_scan + py
+        X, Y = pc_plot_handle.get_data()
+        pc_plot_handle.set_data(np.concatenate([X, points_x]), np.concatenate([Y, points_y]))
 
 
 def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(),
@@ -48,6 +50,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
         fig, axes = plt.subplots(1, 1, figsize=(10, 5), sharex=True, sharey=True)
 
     # _, pc_ax = plt.subplots(1, 1, figsize=(10, 5))  # point cloud axes
+    pc_ax = axes    # axes to draw point cloud map
+    pc_plot_handle = pc_ax.plot([], [], markersize=0.1, linestyle='', marker='.', c='#000000', zorder=-10)[0]
     axes: plt.Axes
     slammer = fs.FastSLAM(slam_settings, axes)
     i = j = -1
@@ -83,7 +87,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
 
     print_last_t = time.time()
 
-    print('\n\n')  # because print code starts by going two lines up
+    #print('\n\n')  # because print code starts by going two lines up
     try:
         while there_is_data(data, i+1, j+1, k+1):
             t0_iter = time.time()
@@ -120,7 +124,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 lines = identify_lines(scan)
                 for line in lines:
                     slammer.make_line_observation(t, (None, line))
-                plot_pc(axes, scan, slammer.pose_estimate())
+                plot_pc(pc_plot_handle, scan, slammer.pose_estimate())
                 dt_lidar[-1] = time.time() - t0
 
             elif it == 1:  # Camera data incoming
@@ -177,6 +181,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             t_iter_mean = np.mean(dt_iter)
             t_sel_mean = np.mean(dt_sel)
             with warnings.catch_warnings():
+                # Mean of empty slices returns nan and causes these warnings
+                # Replace nan with 0
                 warnings.filterwarnings('ignore', r'Mean of empty slice.')
                 warnings.filterwarnings('ignore', r'invalid value encountered in double_scalars')
                 t_lidar_mean = np.nan_to_num(np.mean([dt for dt in dt_lidar if dt != 0]))
@@ -197,14 +203,13 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             if tf - print_last_t > 0.5:
                 print_last_t = tf
                 # \033[<N> A move cursor N lines up; \033[K clear until end of line
-                print('\033[2A', end='')
                 print(
                     f"Iteration {i+j+k:06d}: Averages [ms]: total:{int(1000*t_iter_mean):04d} sel:{int(1000*t_sel_mean):04d}"
                     f" lidar:{int(1000*t_lidar_mean):04d} cam:{int(1000*t_cam_mean):04d} odom:{int(1000*t_odom_mean):04d}"
                     f" draw:{int(1000*t_draw_mean):04d} save:{int(1000*t_save_mean):04d}\033[K")
                 print(
                     f"Ratios: sel:{t_sel_percentage:3.1f}% lidar:{t_lidar_percentage:3.1f}% cam:{t_cam_percentage:3.1f}% odom:{t_odom_percentage:3.1f}% draw:{t_draw_percentage:3.1f}% save:{t_save_percentage:3.1f}%\033[K")
-
+                print('\033[2A', end='')
     except KeyboardInterrupt:
         print('\nKeyboard interrupt. Exiting...')
     finally:
