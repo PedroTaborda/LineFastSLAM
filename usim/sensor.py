@@ -60,7 +60,7 @@ class Sensor:
             [0, 0],
             np.square(np.diag([self.odometry_r_noise_sigma, self.odometry_angular_noise_sigma]))
         )
-        delta_theta = np.mod(diff[0] + np.pi, 2*np.pi) - np.pi
+        delta_theta = np.mod(diff[0] + 180, 360) - 180
         delta_theta_noisy = delta_theta*(1 + delta_theta_noise)
         
         delta_pos_noisy = m.R(delta_theta*delta_theta_noise) @ diff[1:3]*(1 + r_noise)
