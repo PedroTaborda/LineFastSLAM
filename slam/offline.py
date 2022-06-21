@@ -215,11 +215,14 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     except KeyboardInterrupt:
         print('\nKeyboard interrupt. Exiting...')
     finally:
+        print('\n\n')
         if video_name is not None and images_dir is not None:
             to_video(images_dir, video_name + ".mp4", fps=10)
-    slammer._draw_map()
-    slammer._draw_location()
-    plt.show(block=True)
+    if slam_settings.visualize:
+        slammer._draw_map()
+        slammer._draw_location()
+        plt.show(block=True)
+    return slammer.end()
 
 
 if __name__ == "__main__":
@@ -239,21 +242,22 @@ if __name__ == "__main__":
     if os.path.isdir(images_dir):
         shutil.rmtree(images_dir)
     os.mkdir(images_dir)
-
-    images_dir = None
-    slam_sensor_data(
-        sd.load_sensor_data(args.file),
-        slam_settings=fs.FastSLAMSettings(
-            action_model_settings=am.ActionModelSettings(
-                action_type=am.ActionType.FREE,
-            ),
-            num_particles=args.N,
-            visualize=not args.no_visualize,
-            trajectory_trail=True,
+    slam_settings=fs.FastSLAMSettings(
+        action_model_settings=am.ActionModelSettings(
+            action_type=am.ActionType.FREE,
         ),
+        num_particles=args.N,
+        visualize=not args.no_visualize,
+        trajectory_trail=True,
+    )
+    images_dir = None
+    res = slam_sensor_data(
+        sd.load_sensor_data(args.file),
+        slam_settings=slam_settings,
         realtime=args.realtime,
         images_dir=images_dir,
         show_images=args.show_images,
         save_every=args.save_every,
         video_name=args.video_name,
     )
+    print(res)
