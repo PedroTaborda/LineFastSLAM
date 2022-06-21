@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 
 from slam.map import OrientedLandmarkSettings, Map, Observation, UnorientedObservation, LineObservation
 
+import scipy.stats
+import time
 
 class Particle:
     canonical_arrow: np.ndarray = np.array(
@@ -92,25 +94,43 @@ class Particle:
 
         observed_landmarks = self.map.landmarks
         observed_lines_keys = [landmark for landmark in observed_landmarks if landmark < 0]
-        rh_world, th_world = h_inv(np.array([rh, th]))
+        '''rh_world, th_world = h_inv(np.array([rh, th]))
         xmark = np.array([rh_world*np.cos(th_world), rh_world*np.sin(th_world)])
         try_to_match = []
-        # print(f"{observed_lines_keys}")
+         print(f"{observed_lines_keys}")
         for key in observed_lines_keys:
             rh_observed_world, th_observed_world = self.map.landmarks[key].get_mu()
             xmark_observed = np.array([rh_observed_world*np.cos(th_observed_world), rh_observed_world*np.sin(th_observed_world)])
-            if np.linalg.norm(xmark_observed - xmark) < 1: # TODO: make this a parameter (it means only try matching close landmarks)
-                try_to_match.append(key)
+            dot_product = np.dot(xmark_observed, xmark)
+            if dot_product < 0:
+                continue
+            if np.abs(np.sqrt(dot_product) - np.linalg.norm(xmark)) < 0.2*np.linalg.norm(xmark) or \
+                np.abs(np.sqrt(dot_product) - np.linalg.norm(xmark)) < 0.05: # TODO: make this a parameter (it means only try matching close landmarks)
+                try_to_match.append(key)'''
 
-        if try_to_match:
-            max_likelihood, best_key = 0, 0
-            for key in try_to_match:
-                self.map.landmarks[key].set_sensor_model(h, get_Dhx, get_Dhn)
-                likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]), diff = diff)
-                if likelihood > max_likelihood:
-                    max_likelihood, best_key = likelihood, key
-            landmark_id = best_key
-        else:
+        
+        max_likelihood, best_key = 0, 0
+        z = np.array([rh, th])
+        sensor_covariance = n_gain @ n_gain.T
+        for key in observed_lines_keys:
+            landmark = self.map.landmarks[key]
+            zhat_mu = h(landmark.get_mu(), np.zeros_like(landmark.get_mu()))
+            #self.map.landmarks[key].set_sensor_model(h, get_Dhx, get_Dhn)
+            #likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]), diff = diff)
+            dist = scipy.stats.multivariate_normal(mean=np.array([0, 0]), cov=sensor_covariance)
+            likelihood = dist.pdf(diff(z, zhat_mu))
+            #likelihood = np.linalg.det(2 * np.pi * sensor_covariance)**(-1/2) \
+            #* np.exp(-1/2 * np.transpose(diff(z, zhat_mu)) @ sensor_covariance_inv @ (diff(z, zhat_mu)))
+            #mahalanobis = np.transpose(diff(z, landmark.get_mu())) @ sensor_covariance_inv @\
+            #                diff(z, landmark.get_mu())
+            if likelihood > max_likelihood:
+                max_likelihood, best_key = likelihood, key
+        landmark_id = best_key
+
+        if max_likelihood < 0.2:
+            if best_key != 0:
+                print(diff(z, h(self.map.landmarks[best_key].get_mu(), np.zeros_like(self.map.landmarks[best_key].get_mu()))))
+                #time.sleep(0.5)
             landmark_id = min(observed_lines_keys) - 1 if observed_lines_keys else -1
 
         obs = LineObservation(
