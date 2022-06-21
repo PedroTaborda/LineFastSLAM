@@ -42,8 +42,8 @@ def plot_pc(pc_plot_handle, scan: np.ndarray, pose: np.ndarray):
 def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(),
                      images_dir=None, realtime: bool = False, show_images: bool = False, stats_iter_size: int = 30,
                      save_every: int = 1, video_name: str = "slam"):
-    if slam_settings.visualize is False:
-        raise ValueError('Visualization must be enabled to use slam_sensor_data.')
+    #if slam_settings.visualize is False:
+    #    raise ValueError('Visualization must be enabled to use slam_sensor_data.')
 
     if show_images:
         fig, (axes, cam_ax) = plt.subplots(2, 1, figsize=(10, 5))
@@ -140,7 +140,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 for id, z in landmarks:
                     r, theta, psi = z
                     #slammer.make_unoriented_observation(t, (id, np.array([r, theta])))
-                    slammer.make_oriented_observation(t, (id, np.array([r, theta, psi])))
+                    #slammer.make_oriented_observation(t, (id, np.array([r, theta, psi])))
 
                 dt_camera[-1] = time.time() - t0
             elif it == 2:  # Odometry data incoming
@@ -165,7 +165,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 t1 = time.time()
                 dt_odometry[-1] = t1 - t0
 
-                slammer._draw()
+                #if slam_settings.visualize:
+                #    slammer._draw()
                 # fig.canvas.draw()
                 t2 = time.time()
                 dt_draw[-1] = t2 - t1
@@ -216,6 +217,9 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     finally:
         if video_name is not None and images_dir is not None:
             to_video(images_dir, video_name + ".mp4", fps=10)
+    slammer._draw_map()
+    slammer._draw_location()
+    plt.show(block=True)
 
 
 if __name__ == "__main__":
@@ -236,6 +240,7 @@ if __name__ == "__main__":
         shutil.rmtree(images_dir)
     os.mkdir(images_dir)
 
+    images_dir = None
     slam_sensor_data(
         sd.load_sensor_data(args.file),
         slam_settings=fs.FastSLAMSettings(

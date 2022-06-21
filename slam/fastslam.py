@@ -22,7 +22,7 @@ class FastSLAMSettings:
     landmark_settings: OrientedLandmarkSettings = OrientedLandmarkSettings()
     map_type: type = type(Map)
     resampling_type: ResampleType = ResampleType.LOW_VARIANCE
-    r_std: float = 0.05
+    r_std: float = 0.1
     phi_std: float = 3*np.pi/180
     psi_std: float = 5*np.pi/180
     visualize: bool = False
@@ -68,7 +68,8 @@ class FastSLAM:
             self.trajectory_estimate += [(t, actual_location)]
 
         if self.settings.visualize:
-            self._draw_location(actual_location=actual_location)
+            ...
+            #self._draw_location(actual_location=actual_location)
 
         if t < self.cur_time:
             print(
@@ -86,7 +87,8 @@ class FastSLAM:
 
         self._normalize_particle_weights()
         if self.settings.visualize:
-            self._draw_map()
+            ...
+            #self._draw_map()
         _ = 1  # for debug purposes
 
         if t < self.cur_time:
@@ -105,7 +107,8 @@ class FastSLAM:
 
         self._normalize_particle_weights()
         if self.settings.visualize:
-            self._draw_map()
+            ...
+            #self._draw_map()
         _ = 1  # for debug purposes
 
         if t < self.cur_time:
@@ -125,7 +128,8 @@ class FastSLAM:
 
         self._normalize_particle_weights()
         if self.settings.visualize:
-            self._draw_map()
+            ...
+            #self._draw_map()
         _ = 1  # for debug purposes
 
         if t < self.cur_time:

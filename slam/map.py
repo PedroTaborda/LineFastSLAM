@@ -23,7 +23,7 @@ class LandmarkSettings(EKFSettings):
     """
     mu0: np.ndarray = np.array([0, 0])
     cov0: np.ndarray = np.square(np.diag([0.1, 0.1]))
-    min_cov: np.ndarray = np.square(np.diag([0.01, 0.01]))
+    min_cov: np.ndarray = np.square(np.diag([0, 0]))
     g: callable = lambda x, u, m: x
     get_Dgx: callable = lambda x, u: np.eye(2)
     get_Dgm: callable = lambda x, u: np.zeros((2, 2))
@@ -37,7 +37,7 @@ class LineLandmarkSettings(LandmarkSettings):
     rh = x*cos(th) + y*sin(th)
     """
     cov0: np.ndarray = np.square(np.diag([0.1, 0.1])) 
-    min_cov: np.ndarray = np.square(np.diag([0.01, 0.01]))
+    min_cov: np.ndarray = np.square(np.diag([0, 0]))
 
 @dataclass
 class UnorientedLandmarkSettings(LandmarkSettings):
@@ -49,7 +49,7 @@ class UnorientedLandmarkSettings(LandmarkSettings):
     """
     mu0: np.ndarray = np.array([0, 0])
     cov0: np.ndarray = np.square(np.diag([0.1, 0.1])) 
-    min_cov: np.ndarray = np.square(np.diag([0.01, 0.01]))
+    min_cov: np.ndarray = np.square(np.diag([0, 0]))
     g: callable = lambda x, u, m: x
     get_Dgx: callable = lambda x, u: np.eye(2)
     get_Dgm: callable = lambda x, u: np.zeros((2, 2))
@@ -64,7 +64,7 @@ class OrientedLandmarkSettings(LandmarkSettings):
     """
     mu0: np.ndarray = np.array([0, 0, 0])
     cov0: np.ndarray = np.square(np.diag([0.1, 0.1, 0.05]))
-    min_cov: np.ndarray = np.square(np.diag([0.01, 0.01, 0.01]))
+    min_cov: np.ndarray = np.square(np.diag([0, 0, 0]))
     g: callable = lambda x, u, m: x
     get_Dgx: callable = lambda x, u: np.eye(3)
     get_Dgm: callable = lambda x, u: np.zeros((3, 3))
@@ -303,6 +303,7 @@ class Map:
 
     def _draw(self, ax, **plot_kwargs):
         for landmark_id in self.landmarks:
+            print(self.landmarks[landmark_id].get_mu())
             self.landmarks[landmark_id]._draw(ax, **plot_kwargs)
 
     def _undraw(self):

@@ -68,7 +68,7 @@ def identify_lines(scan: np.ndarray, plot: bool = False) -> np.ndarray:
         th = np.arctan2(b, a)
         rh = -c/np.sqrt(a**2 + b**2)
         if rh < 0:
-            rh, th = -rh, th + np.pi
+            rh, th = -rh, np.mod(th + np.pi + np.pi, 2*np.pi) - np.pi
         return (rh, th), best_inliers
 
 

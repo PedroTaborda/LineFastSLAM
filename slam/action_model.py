@@ -29,7 +29,7 @@ class ActionModelSettings:
     ODOM_ADD_COV: np.ndarray = np.square(np.diag([0.1, 10*np.pi/180]))
 
     ODOM_MULT_MU: np.ndarray = np.array([1, 1])  # multiplies with r, delta_theta
-    ODOM_MULT_COV: np.ndarray = 0 * np.square(np.diag([0.2, 10*np.pi/180]))
+    ODOM_MULT_COV: np.ndarray = np.square(np.diag([0.1, 0.1]))
 
 
 def action_model(state: np.ndarray, odometry: np.ndarray,
