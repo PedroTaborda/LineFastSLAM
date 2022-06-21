@@ -92,12 +92,15 @@ class EKF:
 
         total_cov = zhat_cov + Dhn @ Dhn.T
 
-        dist = scipy.stats.multivariate_normal(mean=zero_n, cov=total_cov)
+        #dist = scipy.stats.multivariate_normal(mean=zero_n, cov=total_cov)
+        #p = dist.pdf(diff(z, zhat_mu))
 
-        p = dist.pdf(diff(z, zhat_mu))
+        # Replace with the pdf expression because the scipy implementation is too slow.
+        p = np.linalg.det(2 * np.pi * total_cov)**(-1/2) \
+            * np.exp(-1/2 * np.transpose((diff(z, zhat_mu) - zero_n)) @ np.linalg.inv(total_cov) @ (diff(z, zhat_mu) - zero_n))
         if p == 0:
             # \033[<N>B moves cursor N lines down, in case cursor is not at end of console
-            print("\033[99B\r[WARNING] Likelihood is 0")
+            #print("\033[99B\r[WARNING] Likelihood is 0")
             return 0.00001
         return p
 
