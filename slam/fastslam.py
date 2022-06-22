@@ -26,6 +26,8 @@ class FastSLAMSettings:
     r_std: float = 0.08
     phi_std: float = 10*np.pi/180
     psi_std: float = 5*np.pi/180
+    r_std_line: float = 0.08
+    phi_std_line: float = 10*np.pi/180
     visualize: bool = False
     trajectory_trail: bool = False
     rng_seed: int = field(default=None, init=False)
@@ -49,6 +51,8 @@ class FastSLAMSettings:
             str(self.r_std).encode(),
             str(self.phi_std).encode(),
             str(self.psi_std).encode(),
+            str(self.r_std_line).encode(),
+            str(self.phi_std_line).encode(),
             str(self.rng_seed).encode()
         ]
         all_bytes_joined = b''.join(vars_to_hash)
@@ -69,6 +73,7 @@ class FastSLAM:
         self.particles: list[Particle] = [Particle(default_landmark_settings=settings.landmark_settings) for _ in range(settings.num_particles)]
         self.particle_markers = [None]*settings.num_particles
         self.n_gain = np.diag([settings.r_std, settings.phi_std, settings.psi_std])
+        self.n_gain_line = np.diag([settings.r_std_line, settings.phi_std_line])
 
         # Contains the estimated location of the robot as a list of (time, [x, y, theta])
         self.trajectory_estimate: list[tuple[int, np.ndarray]] = []
@@ -160,7 +165,7 @@ class FastSLAM:
                     representing a line in the map.
         """
         for particle in self.particles:
-            particle.make_line_observation(obs_data, self.n_gain[0:2, 0:2])
+            particle.make_line_observation(obs_data, self.n_gain_line)
 
         self._normalize_particle_weights()
         if self.settings.visualize:
