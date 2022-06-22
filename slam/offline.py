@@ -59,6 +59,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     k = 0
     t0_ros = [data.lidar[i+1][0], data.camera[j+1][0], data.odometry[k+1][0]
               ][np.argmin([data.lidar[i+1][0], data.camera[j+1][0], data.odometry[k+1][0]])]
+    total_time = ([data.lidar[-1][0], data.camera[-1][0], data.odometry[-1][0]
+              ][np.argmax([data.lidar[-1][0], data.camera[-1][0], data.odometry[-1][0]])] - t0_ros)/1e9
 
     def next_times():
         tlidar = data.lidar[i+1][0] if i+1 < len(data.lidar) else np.inf
@@ -68,6 +70,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
 
     it = -1
     t0 = time.time()
+    true_t0 = time.time()
     if data.sim_data is not None:
         actual_map: usim.umap.UsimMap = data.sim_data.map
         for landmark_id in actual_map.landmarks:
@@ -139,7 +142,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     cam_ax.imshow(cv2.cvtColor(Img, cv2.COLOR_BGR2RGB))
                 for id, z in landmarks:
                     r, theta, psi = z
-                    #slammer.make_unoriented_observation(t, (id, np.array([r, theta])))
+                    slammer.make_unoriented_observation(t, (id, np.array([r, theta])))
                     #slammer.make_oriented_observation(t, (id, np.array([r, theta, psi])))
 
                 dt_camera[-1] = time.time() - t0
@@ -202,6 +205,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             t_draw_percentage = 100*np.sum(dt_draw)/t_iter_total
             t_save_percentage = 100*np.sum(dt_save)/t_iter_total
 
+            #slammer._draw_map()
+            #slammer._draw_location()
             if tf - print_last_t > 0.5:
                 print_last_t = tf
                 # \033[<N> A move cursor N lines up; \033[K clear until end of line
@@ -211,7 +216,10 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     f" draw:{int(1000*t_draw_mean):04d} save:{int(1000*t_save_mean):04d}\033[K")
                 print(
                     f"Ratios: sel:{t_sel_percentage:3.1f}% lidar:{t_lidar_percentage:3.1f}% cam:{t_cam_percentage:3.1f}% odom:{t_odom_percentage:3.1f}% draw:{t_draw_percentage:3.1f}% save:{t_save_percentage:3.1f}%\033[K")
-                print('\033[2A', end='')
+                print(
+                    f"Run time: {time.time()-true_t0:.1f}s Completed: {t/total_time*100:3.1f}%\033[K"
+                )
+                print('\033[3A', end='')
     except KeyboardInterrupt:
         print('\nKeyboard interrupt. Exiting...')
     finally:
