@@ -22,8 +22,8 @@ class FastSLAMSettings:
     landmark_settings: OrientedLandmarkSettings = OrientedLandmarkSettings()
     map_type: type = type(Map)
     resampling_type: ResampleType = ResampleType.LOW_VARIANCE
-    r_std: float = 0.1
-    phi_std: float = 3*np.pi/180
+    r_std: float = 0.08
+    phi_std: float = 10*np.pi/180
     psi_std: float = 5*np.pi/180
     visualize: bool = False
     trajectory_trail: bool = False

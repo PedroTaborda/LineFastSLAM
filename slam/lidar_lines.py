@@ -6,7 +6,7 @@ from slam.ransac import RANSAC, RansacModel
 from visualization_utils.mpl_video import to_video
 
 class StraightLineModel(RansacModel):
-    def __init__(self, threshold: float = 0.02):
+    def __init__(self, threshold: float = 0.005):
         self.threshold = threshold
         self.direction: np.ndarray = None
 
@@ -58,7 +58,7 @@ def identify_lines(scan: np.ndarray, plot: bool = False) -> np.ndarray:
     xypoints = (np.array([np.cos(angles), np.sin(angles)]) * cleaned_scan).T
     model = StraightLineModel()
 
-    minp = 15
+    minp = 25
     noise_rejection_factor = 10
 
     def get_line(data_points, t):
