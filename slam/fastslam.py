@@ -103,10 +103,6 @@ class FastSLAM:
         if actual_location is not None:
             self.actual_trajectory += [(t, actual_location)]
 
-        if self.settings.visualize:
-            ...
-            #self._draw_location(actual_location=actual_location)
-
         if t < self.cur_time:
             print(
                 f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
@@ -122,9 +118,6 @@ class FastSLAM:
             particle.make_unoriented_observation(obs_data, self.n_gain[0:2, 0:2])
 
         self._normalize_particle_weights()
-        if self.settings.visualize:
-            ...
-            #self._draw_map()
         _ = 1  # for debug purposes
 
         if t < self.cur_time:
@@ -142,9 +135,6 @@ class FastSLAM:
             particle.make_oriented_observation(obs_data, self.n_gain)
 
         self._normalize_particle_weights()
-        if self.settings.visualize:
-            ...
-            #self._draw_map()
         _ = 1  # for debug purposes
 
         if t < self.cur_time:
@@ -163,9 +153,6 @@ class FastSLAM:
             particle.make_line_observation(obs_data, self.n_gain[0:2, 0:2])
 
         self._normalize_particle_weights()
-        if self.settings.visualize:
-            ...
-            #self._draw_map()
         _ = 1  # for debug purposes
 
         if t < self.cur_time:
@@ -255,8 +242,6 @@ class FastSLAM:
                 list(prev_traj_est[0]) + [pose_estimate[0]],
                 list(prev_traj_est[1]) + [pose_estimate[1]])
 
-        self._draw()
-
     def _draw_map(self) -> None:
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
         new = self.particles[particle_idx_for_map].map
@@ -265,10 +250,11 @@ class FastSLAM:
             self.drawn_map_estimate = new
 
         self.drawn_map_estimate._draw(self.ax, color_ellipse='C01', color_p='C01', color_z='C01')
-        self._draw()
 
     def _draw(self) -> None:
         # self.ax.relim()
+        self._draw_location()
+        self._draw_map()
         self.ax.autoscale_view(False, True, True)
         plt.pause(0.01)
         plt.show(block=False)

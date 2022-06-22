@@ -90,6 +90,9 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     dt_save = collections.deque([0.1], maxlen=stats_iter_size)
 
     print_last_t = time.time()
+    draw_last_t = time.time()
+
+    target_draw_period = 1/5
 
     #print('\n\n')  # because print code starts by going two lines up
     try:
@@ -168,8 +171,6 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 t1 = time.time()
                 dt_odometry[-1] = t1 - t0
 
-                #if slam_settings.visualize:
-                #    slammer._draw()
                 # fig.canvas.draw()
                 t2 = time.time()
                 dt_draw[-1] = t2 - t1
@@ -205,8 +206,11 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             t_draw_percentage = 100*np.sum(dt_draw)/t_iter_total
             t_save_percentage = 100*np.sum(dt_save)/t_iter_total
 
-            #slammer._draw_map()
-            #slammer._draw_location()
+            if tf - draw_last_t > target_draw_period:
+                draw_last_t = tf
+                if slam_settings.visualize:
+                    slammer._draw()
+
             if tf - print_last_t > 0.5:
                 print_last_t = tf
                 # \033[<N> A move cursor N lines up; \033[K clear until end of line
@@ -226,10 +230,10 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
         print('\n\n')
         if video_name is not None and images_dir is not None:
             to_video(images_dir, video_name + ".mp4", fps=10)
-    if slam_settings.visualize:
-        slammer._draw_map()
-        slammer._draw_location()
-        plt.show(block=True)
+    #if slam_settings.visualize:
+    slammer._draw_map()
+    slammer._draw_location()
+    plt.show(block=True)
     return slammer.end()
 
 
@@ -242,6 +246,7 @@ if __name__ == "__main__":
     parser.add_argument("--file", type=str, default='sim0.xz')
     parser.add_argument("-N", type=int, default=50)
     parser.add_argument("--video-name", type=str, default='slam')
+    parser.add_argument("--no-video", action="store_true")
     parser.add_argument("--save-every", type=int, default=1)
     parser.add_argument("-t0", type=float, default=0)
 
@@ -259,7 +264,8 @@ if __name__ == "__main__":
         visualize=not args.no_visualize,
         trajectory_trail=True,
     )
-    images_dir = None
+    if args.no_video:
+        images_dir = None
     res = slam_sensor_data(
         sd.load_sensor_data(args.file),
         slam_settings=slam_settings,
