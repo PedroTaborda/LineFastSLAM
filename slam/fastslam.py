@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import copy
 import inspect
-from dataclasses import dataclass
+import ast
+import hashlib
+from dataclasses import dataclass, field
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -27,6 +28,39 @@ class FastSLAMSettings:
     psi_std: float = 5*np.pi/180
     visualize: bool = False
     trajectory_trail: bool = False
+    rng_seed: int = field(default=None, init=False)
+
+    def __hash__(self) -> int:
+        return int(self.hash_hex(), 16)
+
+    def hash_str(self) -> str:        
+        self.action_model_settings.ODOM_ADD_COV.flags.writeable = False
+        self.landmark_settings.cov0.flags.writeable = False
+        self.landmark_settings.min_cov.flags.writeable = False
+        # ast.parse(inspect.getsource(self.resampling_type)).body[0].value.string
+        vars_to_hash =[
+            str(self.num_particles).encode(),
+            self.action_model_settings.action_type.name.encode(),
+            self.action_model_settings.ODOM_ADD_COV.data,
+            self.landmark_settings.cov0.data,
+            self.landmark_settings.min_cov.data,
+            self.map_type.__name__.encode(),
+            self.resampling_type.__name__.encode(),
+            str(self.r_std).encode(),
+            str(self.phi_std).encode(),
+            str(self.psi_std).encode(),
+            str(self.rng_seed).encode()
+        ]
+        all_bytes_joined = b''.join(vars_to_hash)
+        return hashlib.sha1(all_bytes_joined).hexdigest()
+
+@dataclass
+class SLAMResult:
+    """Result of a FastSLAM run.
+    """
+    map: Map
+    particles: np.ndarray
+    trajectory: np.ndarray
 
 class FastSLAM:
     def __init__(self, settings: FastSLAMSettings = FastSLAMSettings(), ax: plt.Axes = None) -> None:
@@ -36,10 +70,9 @@ class FastSLAM:
         self.particle_markers = [None]*settings.num_particles
         self.n_gain = np.diag([settings.r_std, settings.phi_std, settings.psi_std])
 
-        self.map_estimate: settings.map_type = None
-
         # Contains the estimated location of the robot as a list of (time, [x, y, theta])
         self.trajectory_estimate: list[tuple[int, np.ndarray]] = []
+        self.actual_trajectory: list[tuple[int, np.ndarray]] = []
 
         if settings.visualize:
             if ax is None:
@@ -50,6 +83,9 @@ class FastSLAM:
             self._init_visualizer()
 
         self.cur_time: float = 0
+
+        if settings.rng_seed is not None:
+            np.random.seed(settings.rng_seed)
 
     def perform_action(self, t: float, odometry: np.ndarray, actual_location: np.ndarray = None) -> None:
         """Update the pose of all particles using the odometry data.
@@ -65,7 +101,7 @@ class FastSLAM:
         self.trajectory_estimate += [(t, self.pose_estimate())]
 
         if actual_location is not None:
-            self.trajectory_estimate += [(t, actual_location)]
+            self.actual_trajectory += [(t, actual_location)]
 
         if self.settings.visualize:
             ...
@@ -161,6 +197,18 @@ class FastSLAM:
         particle_idx_for_map = np.argmax(np.array([particle.weight for particle in self.particles]), axis=0)
         map_estimate: Map = self.particles[particle_idx_for_map].map
         return map_estimate
+
+    def end(self) -> SLAMResult:
+        """Returns the final SLAM result.
+
+        Returns:
+            The final SLAM result.
+        """
+        # TODO: definition of __reduce__ for pickling
+        map = None # self.map_estimate()
+        particles = None # self.particles 
+        trajectory_estimate = self.trajectory_estimate
+        return SLAMResult(map=map, particles=particles, trajectory=trajectory_estimate)
 
     def _normalize_particle_weights(self) -> None:
         weights = np.array([particle.weight for particle in self.particles])

@@ -13,6 +13,15 @@ from matplotlib.patches import Ellipse
 from ekf.ekf import EKF, EKFSettings
 from visualization_utils.mpl_video import to_video
 
+def default_g(x, u, m):
+    return x
+
+def default_gDgx(x, u):
+    return np.eye(2)
+
+def default_gDgm(x, u):
+    return np.zeros((2, 2))
+
 @dataclass
 class LandmarkSettings(EKFSettings):
     """Settings for the EKF representing a landmark.
@@ -24,9 +33,9 @@ class LandmarkSettings(EKFSettings):
     mu0: np.ndarray = np.array([0, 0])
     cov0: np.ndarray = np.square(np.diag([0.1, 0.1]))
     min_cov: np.ndarray = None
-    g: callable = lambda x, u, m: x
-    get_Dgx: callable = lambda x, u: np.eye(2)
-    get_Dgm: callable = lambda x, u: np.zeros((2, 2))
+    g: callable = default_g
+    get_Dgx: callable = default_gDgx
+    get_Dgm: callable = default_gDgm
 
 @dataclass
 class LineLandmarkSettings(LandmarkSettings):
@@ -50,9 +59,10 @@ class UnorientedLandmarkSettings(LandmarkSettings):
     mu0: np.ndarray = np.array([0, 0])
     cov0: np.ndarray = np.square(np.diag([0.1, 0.1])) 
     min_cov: np.ndarray = np.square(np.diag([0, 0]))
-    g: callable = lambda x, u, m: x
-    get_Dgx: callable = lambda x, u: np.eye(2)
-    get_Dgm: callable = lambda x, u: np.zeros((2, 2))
+    g: callable = default_g
+    get_Dgx: callable = default_gDgx
+    get_Dgm: callable = default_gDgm
+
 
 @dataclass
 class OrientedLandmarkSettings(LandmarkSettings):
@@ -65,9 +75,10 @@ class OrientedLandmarkSettings(LandmarkSettings):
     mu0: np.ndarray = np.array([0, 0, 0])
     cov0: np.ndarray = np.square(np.diag([0.1, 0.1, 0.05]))
     min_cov: np.ndarray = np.square(np.diag([0, 0, 0]))
-    g: callable = lambda x, u, m: x
-    get_Dgx: callable = lambda x, u: np.eye(3)
-    get_Dgm: callable = lambda x, u: np.zeros((3, 3))
+    g: callable = default_g
+    get_Dgx: callable = default_gDgx
+    get_Dgm: callable = default_gDgm
+
 
 
 r = 0.2  # std_dev of default linear observation model
