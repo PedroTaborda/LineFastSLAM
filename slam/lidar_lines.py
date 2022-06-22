@@ -24,20 +24,19 @@ class StraightLineModel(RansacModel):
         """
         # print(f'[INFO] ({inspect.currentframe().f_code.co_name}) Fitting straight line model')
         # print(data_points)
-        A = np.block([data_points, np.ones_like([data_points[:, 0]]).T])
-        vals, vecs = np.linalg.eig(A.T @ A) 
-        self.direction = vecs[:, np.argmin(vals)]
+        vals, vecs = np.linalg.eigh(data_points.T @ data_points) 
+        self.direction = vecs[:, 0]
         # print(f'[INFO] ({inspect.currentframe().f_code.co_name}) Direction: {self.direction}')
 
     def inliers(self, data_points):
-        projections = np.block([data_points, np.ones_like([data_points[:, 0]]).T]) @ self.direction
+        projections = data_points @ self.direction
         # print(f'[INFO] ({inspect.currentframe().f_code.co_name}) Finding inliers')
         # print(np.block([data_points, np.ones_like([data_points[:, 0]]).T]) @ self.direction)
         # print(f"Inliers = {data_points[np.where(projections < self.threshold)].shape}")
-        return data_points[np.where( np.abs(projections) < self.threshold)]
+        return data_points[np.abs(projections) < self.threshold]
 
     def idxoutliers(self, data_points):
-        projections = np.block([data_points, np.ones_like([data_points[:, 0]]).T]) @ self.direction
+        projections = data_points @ self.direction
         return np.abs(projections) > self.threshold
 
 def identify_lines(scan: np.ndarray, plot: bool = False) -> np.ndarray:
@@ -56,10 +55,11 @@ def identify_lines(scan: np.ndarray, plot: bool = False) -> np.ndarray:
     angles = good.astype(float)*np.pi/180
     cleaned_scan = scan[good]
     xypoints = (np.array([np.cos(angles), np.sin(angles)]) * cleaned_scan).T
+    xypoints = np.block([xypoints, np.ones_like([xypoints[:, 0]]).T])
     model = StraightLineModel()
 
     minp = 25
-    noise_rejection_factor = 10
+    noise_rejection_factor = 20
 
     def get_line(data_points, t):
         # Identify lines in the lidar scan.

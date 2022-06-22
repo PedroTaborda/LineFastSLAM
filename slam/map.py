@@ -22,6 +22,41 @@ def default_gDgx(x, u):
 def default_gDgm(x, u):
     return np.zeros((2, 2))
 
+def h_inv_line(z, parameters):
+    p, theta, R, lidar_vector, n_gain = parameters
+    rh_robot, th_robot = z
+    th_world = np.mod(th_robot + theta + np.pi, 2*np.pi) - np.pi
+    point_on_line_world = R @ (np.array([rh_robot * np.cos(th_robot), rh_robot * np.sin(th_robot)]) + lidar_vector) + p
+    rh_world = point_on_line_world.dot(np.array([np.cos(th_world), np.sin(th_world)]))
+    x = rh_world, th_world
+    if rh_world < 0:
+        x = -rh_world, np.mod(th_world + 2*np.pi, 2*np.pi) - np.pi
+    return np.array(x)
+    
+def h_line(x, n, parameters):
+    p, theta, R, lidar_vector, n_gain = parameters
+    rh_world, th_world = x
+    th_robot = np.mod(th_world - theta + np.pi, 2*np.pi) - np.pi
+    point_on_line_robot = R.T @ (np.array([rh_world * np.cos(th_world), rh_world * np.sin(th_world)]) - p) - lidar_vector
+    rh_robot = point_on_line_robot.dot(np.array([np.cos(th_robot), np.sin(th_robot)]))
+    z = [rh_robot, th_robot]
+    if rh_robot < 0:
+        z = [-rh_robot, np.mod(th_robot + 2*np.pi, 2*np.pi) - np.pi]
+    return np.array(z) + n_gain @ n
+
+def get_Dhx_line(x, parameters):
+    p, theta, R, lidar_vector, n_gain = parameters
+    dhx = np.eye(2)
+    direction = - np.sign(p.dot(np.array([np.cos(x[1]), np.sin(x[1])])) - x[0])
+    rho, alpha = np.linalg.norm(p), np.arctan2(p[1], p[0])
+    dhx[0, 0] = direction
+    dhx[0, 1] = rho * np.sin(x[1] - alpha + (- direction + 1) / 2 * np.pi)
+    return dhx
+
+def get_Dhn_line(x, parameters):
+    p, theta, R, lidar_vector, n_gain = parameters
+    return n_gain
+
 @dataclass
 class LandmarkSettings(EKFSettings):
     """Settings for the EKF representing a landmark.
@@ -80,7 +115,6 @@ class OrientedLandmarkSettings(LandmarkSettings):
     get_Dgm: callable = default_gDgm
 
 
-
 r = 0.2  # std_dev of default linear observation model
 
 class Landmark(EKF):
@@ -89,13 +123,15 @@ class Landmark(EKF):
         self.drawn = False
         self.confidence_interval = 0.99 # draw ellipse for this confidence interval
         self.latest_zx = None
+        self.seen_counter = 0
 
     def predict(self):
         super().predict(u=0)
 
-    def update(self, zx, **kwargs): # zx is z with x coords
-        super().update(self.h(zx, np.zeros_like(zx)), **kwargs)
+    def update(self, zx, parameters=None, **kwargs): # zx is z with x coords
+        super().update(self.h(zx, np.zeros_like(zx), parameters=parameters), parameters=parameters, **kwargs)
         self.latest_zx = zx
+        self.seen_counter += 1
 
     def _undraw(self):
         if self.drawn:
@@ -175,6 +211,56 @@ class UnorientedLandmark(Landmark):
         self.z_handle.set(offsets=p)
 
 class LineLandmark(Landmark):
+    def __init__(self, settings: LandmarkSettings):
+        super().__init__(settings)
+        self.zero_m = np.array([0, 0])
+        self.zero_n = np.array([0, 0])
+        self.parameters = None
+
+    def update(self, zx, diff=lambda x,y : x - y, parameters=None):
+        super().update(zx, diff=diff, parameters=parameters)
+
+        if (not self.parameters and parameters) or not all([(self.parameters[i]==parameters[i]).all() for i in range(len(parameters))]):
+            self.parameters = parameters
+
+            self.Dhx = self.get_Dhx(self.mu, parameters)
+            # Get sensitivity to measurement noise
+            self.Dhn = self.get_Dhn(self.mu, parameters)
+            # Variance of expected measurements
+            self.zhat_cov = self.Dhx @ self.cov @ self.Dhx.T
+            # Expected measurement
+            self.zhat_mu = self.h(self.mu, self.zero_n, self.parameters)
+
+            self.total_cov = self.zhat_cov + self.Dhn @ self.Dhn.T
+            self.inv_total_cov = np.linalg.inv(self.total_cov)
+            self.normalizing_factor = np.linalg.det(2 * np.pi * self.total_cov)**(-1/2)
+
+
+    def get_likelihood(self, z, diff=lambda x, y: x - y, parameters=None):
+        if (not self.parameters and parameters) or not all([(self.parameters[i]==parameters[i]).all() for i in range(len(parameters))]):
+            self.parameters = parameters
+
+            self.Dhx = self.get_Dhx(self.mu, parameters)
+            # Get sensitivity to measurement noise
+            self.Dhn = self.get_Dhn(self.mu, parameters)
+            # Variance of expected measurements
+            self.zhat_cov = self.Dhx @ self.cov @ self.Dhx.T
+            # Expected measurement
+            self.zhat_mu = self.h(self.mu, self.zero_n, self.parameters)
+
+            self.total_cov = self.zhat_cov + self.Dhn @ self.Dhn.T
+            self.inv_total_cov = np.linalg.inv(self.total_cov)
+            self.normalizing_factor = np.linalg.det(2 * np.pi * self.total_cov)**(-1/2)
+        # Replace with the pdf expression because the scipy implementation is too slow.
+        p =  self.normalizing_factor \
+            * np.exp(-1/2 * diff(z, self.zhat_mu).T @ self.inv_total_cov @ diff(z, self.zhat_mu))
+        if p == 0:
+            # \033[<N>B moves cursor N lines down, in case cursor is not at end of console
+            #print("\033[99B\r[WARNING] Likelihood is 0")
+            return 0.00001
+        return p
+
+
     def _draw(self, ax, actual_pos: np.ndarray=None, color_ellipse='C00', color_p='C01', color_z='C02'):
         """Draw the landmark on the given matplotlib axis.
 
@@ -293,11 +379,11 @@ class Map:
     def __init__(self) -> None:
         self.landmarks: dict[int, Landmark] = {}
 
-    def update(self, obs: Observation, diff = lambda x, y: x-y):
+    def update(self, obs: Observation, diff = lambda x, y: x-y, parameters = None):
         if obs.landmark_id not in self.landmarks:
-            x0 = obs.h_inv(obs.z)
-            Dhn = obs.get_Dhn(x0)
-            Dhx_inv = np.linalg.inv(obs.get_Dhx(x0))
+            x0 = obs.h_inv(obs.z, parameters)
+            Dhn = obs.get_Dhn(x0, parameters)
+            Dhx_inv = np.linalg.inv(obs.get_Dhx(x0, parameters))
             landmark_settings = default_landmark_settings(obs.type)
             landmark_settings.mu0 = x0
             landmark_settings.cov0 = Dhx_inv @ Dhn @ Dhn.T @ Dhx_inv.T
@@ -306,16 +392,15 @@ class Map:
             self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
             return 1.0
         else:
-            self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
-            likelyhood = self.landmarks[obs.landmark_id].get_likelihood(obs.z, diff=diff)
-            self.landmarks[obs.landmark_id].predict()
-            self.landmarks[obs.landmark_id].update(obs.h_inv(obs.z), diff=diff)
+            #self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
+            likelyhood = self.landmarks[obs.landmark_id].get_likelihood(obs.z, diff=diff, parameters=parameters)
+            self.landmarks[obs.landmark_id].update(obs.h_inv(obs.z, parameters=parameters), diff=diff, parameters=parameters)
             return likelyhood
 
     def _draw(self, ax, **plot_kwargs):
         for landmark_id in self.landmarks:
-            print(self.landmarks[landmark_id].get_mu())
-            self.landmarks[landmark_id]._draw(ax, **plot_kwargs)
+            if self.landmarks[landmark_id].seen_counter > 10:
+                self.landmarks[landmark_id]._draw(ax, **plot_kwargs)
 
     def _undraw(self):
         for landmark_id in self.landmarks:
