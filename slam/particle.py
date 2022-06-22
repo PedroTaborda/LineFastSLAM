@@ -6,7 +6,7 @@ import copy
 import numpy as np
 import matplotlib.pyplot as plt
 
-from slam.map import OrientedLandmarkSettings, Map, Observation, UnorientedObservation, LineObservation
+from slam.map import OrientedLandmarkSettings, Map, Observation, UnorientedObservation, LineObservation, get_Dhn_line, get_Dhx_line, h_inv_line, h_line
 
 import scipy.stats
 import time
@@ -54,49 +54,17 @@ class Particle:
         rh, th = obs_data[1]
         p = np.array([px, py])
         R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
-        pr = R.T @ p
-        lidar_vector = np.array([-0.0625, 0]);
-
-        def h_inv(z):
-            rh_robot, th_robot = z
-            th_world = np.mod(th_robot + theta + np.pi, 2*np.pi) - np.pi
-            point_on_line_world = R @ (np.array([rh_robot * np.cos(th_robot), rh_robot * np.sin(th_robot)]) + lidar_vector) + p
-            rh_world = point_on_line_world.dot(np.array([np.cos(th_world), np.sin(th_world)]))
-            x = rh_world, th_world
-            if rh_world < 0:
-                x = -rh_world, np.mod(th_world + 2*np.pi, 2*np.pi) - np.pi
-            return np.array(x)
+        lidar_vector = np.array([-0.0625, 0])
+        parameters = (p, theta, R, lidar_vector, n_gain)
 
         def diff(rh_th1, rh_th2):
             return np.array([rh_th1[0] - rh_th2[0], np.mod(rh_th1[1] - rh_th2[1] + np.pi, 2*np.pi) - np.pi])
-            
-        def h(x, n):
-            rh_world, th_world = x
-            th_robot = np.mod(th_world - theta + np.pi, 2*np.pi) - np.pi
-            point_on_line_robot = R.T @ (np.array([rh_world * np.cos(th_world), rh_world * np.sin(th_world)]) - p) - lidar_vector
-            rh_robot = point_on_line_robot.dot(np.array([np.cos(th_robot), np.sin(th_robot)]))
-            z = [rh_robot, th_robot]
-            if rh_robot < 0:
-                z = [-rh_robot, np.mod(th_robot + 2*np.pi, 2*np.pi) - np.pi]
-            return np.array(z) + n_gain @ n
-
-        def get_Dhx(x):
-            dhx = np.eye(2)
-            direction = - np.sign(p.dot(np.array([np.cos(x[1]), np.sin(x[1])])) - x[0])
-            rho, alpha = np.linalg.norm(p), np.arctan2(p[1], p[0])
-            dhx[0, 0] = direction
-            dhx[0, 1] = rho * np.sin(x[1] - alpha + (- direction + 1) / 2 * np.pi)
-            return dhx
-
-        def get_Dhn(x):
-            return n_gain
 
         observed_landmarks = self.map.landmarks
         observed_lines_keys = [landmark for landmark in observed_landmarks if landmark < 0]      
         max_likelihood, best_key = 0, 0
         for key in observed_lines_keys:
-            self.map.landmarks[key].set_sensor_model(h, get_Dhx, get_Dhn)
-            likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]), diff = diff)
+            likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]), diff = diff, parameters = parameters)
             if likelihood > max_likelihood:
                 max_likelihood, best_key = likelihood, key
         landmark_id = best_key
@@ -107,12 +75,12 @@ class Particle:
         obs = LineObservation(
             landmark_id=landmark_id,
             z=np.array([rh, th]),
-            h=h,
-            h_inv=h_inv,
-            get_Dhx=get_Dhx,
-            get_Dhn=get_Dhn
+            h=h_line,
+            h_inv=h_inv_line,
+            get_Dhx=get_Dhx_line,
+            get_Dhn=get_Dhn_line
         )
-        self.weight *= self.map.update(obs, diff = diff)
+        self.weight *= self.map.update(obs, diff = diff, parameters = parameters)
         
     def make_unoriented_observation(self, obs_data: tuple[int, tuple[float, float]], n_gain: np.ndarray) -> None:
         """Make an observation of a landmark on the map.
@@ -127,19 +95,19 @@ class Particle:
         p = np.array([px, py])
         R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
 
-        def h(x, n):    # z is observed position of landmark in robot's reference frame
+        def h(x, n, parameters):    # z is observed position of landmark in robot's reference frame
             z_no_noise = R @ (x - p)
             r_err, ang_err = n_gain @ n
             R_error = np.array([[np.cos(ang_err), np.sin(ang_err)], [-np.sin(ang_err), np.cos(ang_err)]])
             return (1 + (r_err/np.linalg.norm(z_no_noise))) * R_error @ z_no_noise
 
-        def h_inv(z):
+        def h_inv(z, parameters):
             return R.T @ z + p
 
-        def get_Dhx(x):
+        def get_Dhx(x, parameters):
             return R
 
-        def get_Dhn(x):
+        def get_Dhn(x, parameters):
             z = R @ (x - p)
             return np.array([[z[0], -z[1]], [z[1], z[0]]]) @ n_gain
         
@@ -166,7 +134,7 @@ class Particle:
         p = np.array([px, py])
         R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
 
-        def h(x, n):    # z is observed position of landmark in robot's reference frame
+        def h(x, n, parameters):    # z is observed position of landmark in robot's reference frame
             x_prime = x[0:2]
             psi_prime = x[2]
             z_no_noise = R @ (x_prime - p)
@@ -175,18 +143,18 @@ class Particle:
             R_error = np.array([[np.cos(ang_err), np.sin(ang_err)], [-np.sin(ang_err), np.cos(ang_err)]])
             return np.array([*((1 + (r_err/np.linalg.norm(z_no_noise))) * R_error @ z_no_noise), z_psi_no_noise + psi_err])
 
-        def h_inv(z):
+        def h_inv(z, parameters):
             z_prime = z[0:2]
             z_psi = z[2]
             return np.array([*(R.T @ z_prime + p), z_psi + theta])
 
-        def get_Dhx(x):
+        def get_Dhx(x, parameters):
             Dh = np.zeros((3,3))
             Dh[0:2, 0:2] = R
             Dh[2, 2] = 1
             return Dh
 
-        def get_Dhn(x):
+        def get_Dhn(x, parameters):
             Dh = np.zeros((3,3))
             z = R @ (x[0:2] - p)
             Dhz = np.array([[z[0], -z[1]], [z[1], z[0]]]) @ n_gain[0:2, 0:2]

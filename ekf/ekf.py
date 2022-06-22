@@ -62,33 +62,33 @@ class EKF:
 
         self._check_cov()
 
-    def update(self, z, diff=lambda x, y: x - y):
+    def update(self, z, diff=lambda x, y: x - y, parameters=None):
         zero_m = np.zeros_like(self.mu)
-        zero_n = np.zeros_like(self.h(self.mu, zero_m))
+        zero_n = np.zeros_like(self.h(self.mu, zero_m, parameters))
         # Get sensitivity to uncertainty
-        Dhx = self.get_Dhx(self.mu)
+        Dhx = self.get_Dhx(self.mu, parameters)
         # Get sensitivity to measurement noise
-        Dhn = self.get_Dhn(self.mu)
+        Dhn = self.get_Dhn(self.mu, parameters)
         S = Dhx @ self.cov @ Dhx.T + Dhn @ Dhn.T
         K = self.cov @ Dhx.T @ np.linalg.inv(S)
         # Update expected value
-        self.mu = self.mu + K @ diff(z, self.h(self.mu, zero_n))
+        self.mu = self.mu + K @ diff(z, self.h(self.mu, zero_n, parameters))
         # Predict uncertainty
         self.cov = self.cov - K @ Dhx @ self.cov
 
         self._check_cov()
 
-    def get_likelihood(self, z, diff=lambda x, y: x - y):
+    def get_likelihood(self, z, diff=lambda x, y: x - y, parameters=None):
         zero_m = np.zeros_like(self.mu)
-        zero_n = np.zeros_like(self.h(self.mu, zero_m))
+        zero_n = np.zeros_like(self.h(self.mu, zero_m, parameters))
         # Get sensitivity to uncertainty
-        Dhx = self.get_Dhx(self.mu)
+        Dhx = self.get_Dhx(self.mu, parameters)
         # Get sensitivity to measurement noise
-        Dhn = self.get_Dhn(self.mu)
+        Dhn = self.get_Dhn(self.mu, parameters)
         # Variance of expected measurements
         zhat_cov = Dhx @ self.cov @ Dhx.T
         # Expected measurement
-        zhat_mu = self.h(self.mu, zero_n)
+        zhat_mu = self.h(self.mu, zero_n, parameters)
 
         total_cov = zhat_cov + Dhn @ Dhn.T
 
