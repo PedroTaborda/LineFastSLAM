@@ -41,7 +41,7 @@ def plot_pc(pc_plot_handle, scan: np.ndarray, pose: np.ndarray):
 
 def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(),
                      images_dir=None, realtime: bool = False, show_images: bool = False, stats_iter_size: int = 30,
-                     save_every: int = 1, video_name: str = "slam"):
+                     save_every: int = 1, video_name: str = "slam", start_time: float = 0):
     #if slam_settings.visualize is False:
     #    raise ValueError('Visualization must be enabled to use slam_sensor_data.')
 
@@ -120,7 +120,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             dt_save.append(0)
             if it == 0:  # Lidar data incoming
                 i += 1
-                if t < 20 and data.sim_data is None:
+                if t < start_time:
                     continue
                 scan = data.lidar[i][1]
                 if data.sim_data is not None:  # TODO: re run sims and delete this code
@@ -133,7 +133,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
 
             elif it == 1:  # Camera data incoming
                 j += 1
-                if t < 20 and data.sim_data is None:
+                if t < start_time:
                     continue
                 _, landmarks, CmpImg = data.camera[j]
                 if CmpImg is not None and show_images:
@@ -148,7 +148,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 dt_camera[-1] = time.time() - t0
             elif it == 2:  # Odometry data incoming
                 k += 1
-                if t < 20 and data.sim_data is None:
+                if t < start_time:
                     continue
                 theta0, x0, y0 = data.odometry[k-1][1]
                 theta1, x1, y1 = data.odometry[k][1]
@@ -217,7 +217,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 print(
                     f"Ratios: sel:{t_sel_percentage:3.1f}% lidar:{t_lidar_percentage:3.1f}% cam:{t_cam_percentage:3.1f}% odom:{t_odom_percentage:3.1f}% draw:{t_draw_percentage:3.1f}% save:{t_save_percentage:3.1f}%\033[K")
                 print(
-                    f"Run time: {time.time()-true_t0:.1f}s Completed: {t/total_time*100:3.1f}%\033[K"
+                    f"Run time: {time.time()-true_t0:.1f}s Completed: {(t-start_time)/total_time*100:3.1f}%\033[K"
                 )
                 print('\033[3A', end='')
     except KeyboardInterrupt:
@@ -243,6 +243,7 @@ if __name__ == "__main__":
     parser.add_argument("-N", type=int, default=50)
     parser.add_argument("--video-name", type=str, default='slam')
     parser.add_argument("--save-every", type=int, default=1)
+    parser.add_argument("-t0", type=float, default=0)
 
     args = parser.parse_args()
 
@@ -267,5 +268,6 @@ if __name__ == "__main__":
         show_images=args.show_images,
         save_every=args.save_every,
         video_name=args.video_name,
+        start_time=args.t0
     )
     print(res)
