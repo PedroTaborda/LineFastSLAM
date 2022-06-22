@@ -23,7 +23,7 @@ class LandmarkSettings(EKFSettings):
     """
     mu0: np.ndarray = np.array([0, 0])
     cov0: np.ndarray = np.square(np.diag([0.1, 0.1]))
-    min_cov: np.ndarray = np.square(np.diag([0, 0]))
+    min_cov: np.ndarray = None
     g: callable = lambda x, u, m: x
     get_Dgx: callable = lambda x, u: np.eye(2)
     get_Dgm: callable = lambda x, u: np.zeros((2, 2))
@@ -37,7 +37,7 @@ class LineLandmarkSettings(LandmarkSettings):
     rh = x*cos(th) + y*sin(th)
     """
     cov0: np.ndarray = np.square(np.diag([0.1, 0.1])) 
-    min_cov: np.ndarray = np.square(np.diag([0, 0]))
+    min_cov: np.ndarray = None
 
 @dataclass
 class UnorientedLandmarkSettings(LandmarkSettings):
@@ -147,7 +147,7 @@ class UnorientedLandmark(Landmark):
             self.drawn = True    
             self.std_ellipse: Ellipse = Ellipse((0, 0), 1, 1, facecolor='none', edgecolor=color_ellipse)
             ax.add_patch(self.std_ellipse)
-            self.z_handle: PathCollection = ax.scatter(z[0], z[1], marker='1', c=color_z)
+            self.z_handle: PathCollection = ax.scatter(p[0], p[1], marker='1', c=color_z)
 
         # number of std's to include in confidence ellipse
         n_stds = -scipy.stats.norm.ppf((1-self.confidence_interval)/2)
@@ -161,7 +161,7 @@ class UnorientedLandmark(Landmark):
         self.std_ellipse.set_angle(angle_deg)
 
         # Plot latest observation
-        self.z_handle.set(offsets=z)
+        self.z_handle.set(offsets=p)
 
 class LineLandmark(Landmark):
     def _draw(self, ax, actual_pos: np.ndarray=None, color_ellipse='C00', color_p='C01', color_z='C02'):
