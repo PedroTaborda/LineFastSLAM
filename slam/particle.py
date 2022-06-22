@@ -55,31 +55,30 @@ class Particle:
         p = np.array([px, py])
         R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
         pr = R.T @ p
-        
+        lidar_vector = np.array([-0.0625, 0]);
+
         def h_inv(z):
             rh_robot, th_robot = z
             th_world = np.mod(th_robot + theta + np.pi, 2*np.pi) - np.pi
-            point_on_line_world = R @ np.array([rh_robot * np.cos(th_robot), rh_robot * np.sin(th_robot)]) + p
+            point_on_line_world = R @ (np.array([rh_robot * np.cos(th_robot), rh_robot * np.sin(th_robot)]) + lidar_vector) + p
             rh_world = point_on_line_world.dot(np.array([np.cos(th_world), np.sin(th_world)]))
             x = rh_world, th_world
             if rh_world < 0:
-                x = -rh_world, np.mod(th_world + np.pi, 2*np.pi) - np.pi
+                x = -rh_world, np.mod(th_world + 2*np.pi, 2*np.pi) - np.pi
             return np.array(x)
 
         def diff(rh_th1, rh_th2):
             return np.array([rh_th1[0] - rh_th2[0], np.mod(rh_th1[1] - rh_th2[1] + np.pi, 2*np.pi) - np.pi])
             
-
         def h(x, n):
             rh_world, th_world = x
             th_robot = np.mod(th_world - theta + np.pi, 2*np.pi) - np.pi
-            point_on_line_robot = R.T @ (np.array([rh_world * np.cos(th_world), rh_world * np.sin(th_world)]) - p)
+            point_on_line_robot = R.T @ (np.array([rh_world * np.cos(th_world), rh_world * np.sin(th_world)]) - p) - lidar_vector
             rh_robot = point_on_line_robot.dot(np.array([np.cos(th_robot), np.sin(th_robot)]))
             z = [rh_robot, th_robot]
             if rh_robot < 0:
-                z = [-rh_robot, np.mod(th_robot + np.pi, 2*np.pi) - np.pi]
+                z = [-rh_robot, np.mod(th_robot + 2*np.pi, 2*np.pi) - np.pi]
             return np.array(z) + n_gain @ n
-
 
         def get_Dhx(x):
             dhx = np.eye(2)
@@ -93,44 +92,16 @@ class Particle:
             return n_gain
 
         observed_landmarks = self.map.landmarks
-        observed_lines_keys = [landmark for landmark in observed_landmarks if landmark < 0]
-        '''rh_world, th_world = h_inv(np.array([rh, th]))
-        xmark = np.array([rh_world*np.cos(th_world), rh_world*np.sin(th_world)])
-        try_to_match = []
-         print(f"{observed_lines_keys}")
-        for key in observed_lines_keys:
-            rh_observed_world, th_observed_world = self.map.landmarks[key].get_mu()
-            xmark_observed = np.array([rh_observed_world*np.cos(th_observed_world), rh_observed_world*np.sin(th_observed_world)])
-            dot_product = np.dot(xmark_observed, xmark)
-            if dot_product < 0:
-                continue
-            if np.abs(np.sqrt(dot_product) - np.linalg.norm(xmark)) < 0.2*np.linalg.norm(xmark) or \
-                np.abs(np.sqrt(dot_product) - np.linalg.norm(xmark)) < 0.05: # TODO: make this a parameter (it means only try matching close landmarks)
-                try_to_match.append(key)'''
-
-        
+        observed_lines_keys = [landmark for landmark in observed_landmarks if landmark < 0]      
         max_likelihood, best_key = 0, 0
-        z = np.array([rh, th])
-        sensor_covariance = n_gain @ n_gain.T
         for key in observed_lines_keys:
-            landmark = self.map.landmarks[key]
-            zhat_mu = h(landmark.get_mu(), np.zeros_like(landmark.get_mu()))
-            #self.map.landmarks[key].set_sensor_model(h, get_Dhx, get_Dhn)
-            #likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]), diff = diff)
-            dist = scipy.stats.multivariate_normal(mean=np.array([0, 0]), cov=sensor_covariance)
-            likelihood = dist.pdf(diff(z, zhat_mu))
-            #likelihood = np.linalg.det(2 * np.pi * sensor_covariance)**(-1/2) \
-            #* np.exp(-1/2 * np.transpose(diff(z, zhat_mu)) @ sensor_covariance_inv @ (diff(z, zhat_mu)))
-            #mahalanobis = np.transpose(diff(z, landmark.get_mu())) @ sensor_covariance_inv @\
-            #                diff(z, landmark.get_mu())
+            self.map.landmarks[key].set_sensor_model(h, get_Dhx, get_Dhn)
+            likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]), diff = diff)
             if likelihood > max_likelihood:
                 max_likelihood, best_key = likelihood, key
         landmark_id = best_key
 
         if max_likelihood < 0.2:
-            if best_key != 0:
-                print(diff(z, h(self.map.landmarks[best_key].get_mu(), np.zeros_like(self.map.landmarks[best_key].get_mu()))))
-                #time.sleep(0.5)
             landmark_id = min(observed_lines_keys) - 1 if observed_lines_keys else -1
 
         obs = LineObservation(
