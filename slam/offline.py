@@ -173,7 +173,11 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     t1 = time.time()
                     dt_odometry[-1] = t1 - t0
 
-                    # fig.canvas.draw()
+                if time.time() - draw_last_t > target_draw_period:
+                    draw_last_t = time.time()
+                    if slam_settings.visualize:
+                        slammer._draw()
+                if profile:
                     t2 = time.time()
                     dt_draw[-1] = t2 - t1
 
@@ -209,10 +213,6 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 t_draw_percentage = 100*np.sum(dt_draw)/t_iter_total
                 t_save_percentage = 100*np.sum(dt_save)/t_iter_total
 
-            if tf - draw_last_t > target_draw_period:
-                draw_last_t = tf
-                if slam_settings.visualize:
-                    slammer._draw()
             if profile:
                 if tf - print_last_t > 0.5:
                     print_last_t = tf
@@ -280,4 +280,3 @@ if __name__ == "__main__":
         video_name=args.video_name,
         start_time=args.t0
     )
-    print(res)

@@ -11,6 +11,59 @@ from slam.map import OrientedLandmarkSettings, Map, Observation, UnorientedObser
 import scipy.stats
 import time
 
+def diff(rh_th1, rh_th2):
+    return np.array([rh_th1[0] - rh_th2[0], np.mod(rh_th1[1] - rh_th2[1] + np.pi, 2*np.pi) - np.pi])
+
+
+def h_uo(x, n, parameters):    # z is observed position of landmark in robot's reference frame
+    p, R, n_gain = parameters
+    z_no_noise = R @ (x - p)
+    return z_no_noise
+
+def h_inv_uo(z, parameters):
+    p, R, n_gain = parameters
+    return R.T @ z + p
+
+def get_Dhx_uo(x, parameters):
+    p, R, n_gain = parameters
+    return R
+
+def get_Dhn_uo(x, parameters):
+    p, R, n_gain = parameters
+    z = R @ (x - p)
+    return np.array([[z[0], -z[1]], [z[1], z[0]]]) @ n_gain
+        
+def h_o(x, n, parameters):    # z is observed position of landmark in robot's reference frame
+    p, theta, R, n_gain = parameters
+    x_prime = x[0:2]
+    psi_prime = x[2]
+    z_no_noise = R @ (x_prime - p)
+    z_psi_no_noise = psi_prime - theta
+    return np.block([z_no_noise, z_psi_no_noise ])
+
+def h_inv_o(z, parameters):
+    p, theta, R, n_gain = parameters
+    z_prime = z[0:2]
+    z_psi = z[2]
+    return np.array([*(R.T @ z_prime + p), z_psi + theta])
+
+def get_Dhx_o(x, parameters):
+    p, theta, R, n_gain = parameters
+    Dh = np.zeros((3,3))
+    Dh[0:2, 0:2] = R
+    Dh[2, 2] = 1
+    return Dh
+
+def get_Dhn_o(x, parameters):
+    p, theta, R, n_gain = parameters
+    Dh = np.zeros((3,3))
+    z = R @ (x[0:2] - p)
+    Dhz = np.array([[z[0], -z[1]], [z[1], z[0]]]) @ n_gain[0:2, 0:2]
+    Dh[0:2, 0:2] = Dhz
+    Dh[2, 2] = n_gain[2, 2]
+    return Dh
+        
+
 class Particle:
     canonical_arrow: np.ndarray = np.array(
         [[0, 0],
@@ -57,9 +110,6 @@ class Particle:
         lidar_vector = np.array([-0.0625, 0])
         parameters = (p, theta, R, lidar_vector, n_gain)
 
-        def diff(rh_th1, rh_th2):
-            return np.array([rh_th1[0] - rh_th2[0], np.mod(rh_th1[1] - rh_th2[1] + np.pi, 2*np.pi) - np.pi])
-
         observed_landmarks = self.map.landmarks
         observed_lines_keys = [landmark for landmark in observed_landmarks if landmark < 0]      
         max_likelihood, best_key = 0, 0
@@ -94,32 +144,17 @@ class Particle:
         r, phi = obs_data[1]
         p = np.array([px, py])
         R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+        parameters = p, R, n_gain
 
-        def h(x, n, parameters):    # z is observed position of landmark in robot's reference frame
-            z_no_noise = R @ (x - p)
-            r_err, ang_err = n_gain @ n
-            R_error = np.array([[np.cos(ang_err), np.sin(ang_err)], [-np.sin(ang_err), np.cos(ang_err)]])
-            return (1 + (r_err/np.linalg.norm(z_no_noise))) * R_error @ z_no_noise
-
-        def h_inv(z, parameters):
-            return R.T @ z + p
-
-        def get_Dhx(x, parameters):
-            return R
-
-        def get_Dhn(x, parameters):
-            z = R @ (x - p)
-            return np.array([[z[0], -z[1]], [z[1], z[0]]]) @ n_gain
-        
         obs = UnorientedObservation(
             landmark_id=obs_data[0]+100,
             z=np.array([r*np.cos(phi), r*np.sin(phi)]),
-            h=h,
-            h_inv=h_inv,
-            get_Dhx=get_Dhx,
-            get_Dhn=get_Dhn,
+            h=h_uo,
+            h_inv=h_inv_uo,
+            get_Dhx=get_Dhx_uo,
+            get_Dhn=get_Dhn_uo,
         )
-        self.weight *= self.map.update(obs)
+        self.weight *= self.map.update(obs, parameters = parameters)
 
     def make_oriented_observation(self, obs_data: tuple[int, tuple[float, float, float]], n_gain: np.ndarray) -> None:
         """Make an observation of a landmark on the map, considering that the landmark is an Aruco.
@@ -133,44 +168,17 @@ class Particle:
         r, phi, psi = obs_data[1]
         p = np.array([px, py])
         R = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+        parameters = p, theta, R, n_gain
 
-        def h(x, n, parameters):    # z is observed position of landmark in robot's reference frame
-            x_prime = x[0:2]
-            psi_prime = x[2]
-            z_no_noise = R @ (x_prime - p)
-            z_psi_no_noise = psi_prime - theta
-            r_err, ang_err, psi_err = n_gain @ n
-            R_error = np.array([[np.cos(ang_err), np.sin(ang_err)], [-np.sin(ang_err), np.cos(ang_err)]])
-            return np.array([*((1 + (r_err/np.linalg.norm(z_no_noise))) * R_error @ z_no_noise), z_psi_no_noise + psi_err])
-
-        def h_inv(z, parameters):
-            z_prime = z[0:2]
-            z_psi = z[2]
-            return np.array([*(R.T @ z_prime + p), z_psi + theta])
-
-        def get_Dhx(x, parameters):
-            Dh = np.zeros((3,3))
-            Dh[0:2, 0:2] = R
-            Dh[2, 2] = 1
-            return Dh
-
-        def get_Dhn(x, parameters):
-            Dh = np.zeros((3,3))
-            z = R @ (x[0:2] - p)
-            Dhz = np.array([[z[0], -z[1]], [z[1], z[0]]]) @ n_gain[0:2, 0:2]
-            Dh[0:2, 0:2] = Dhz
-            Dh[2, 2] = n_gain[2, 2]
-            return Dh
-        
         obs = Observation(
             landmark_id=obs_data[0],
             z=np.array([r*np.cos(phi), r*np.sin(phi), psi]),
-            h=h,
-            h_inv=h_inv,
-            get_Dhx=get_Dhx,
-            get_Dhn=get_Dhn,
+            h=h_o,
+            h_inv=h_inv_o,
+            get_Dhx=get_Dhx_o,
+            get_Dhn=get_Dhn_o,
         )
-        self.weight *= self.map.update(obs)
+        self.weight *= self.map.update(obs, parameters=parameters)
 
     def copy(self) -> Particle:
         """Copy the particle, creating a new particle sharing the same map.

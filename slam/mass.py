@@ -66,9 +66,18 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
     pool = mp.Pool(processes=pool_processes)
     results = pool.map(perform_slam, to_process)
 
+    fig, ax = plt.subplots(1, 1, )
     for s, res in zip(to_process, results):
         print(f"Saving results for {file_name(s[1], sensor_data)}")
         rel_path = os.path.join(results_dir, file_name(s[1], sensor_data))
+        
+        traj = res.trajectory
+        map = res.map
+        pm.plot_map(map, traj, sensor_data, ax)
+        plt.savefig(rel_path+'.png', dpi=1000)
+        with open(rel_path + '.txt', 'w') as f:
+            f.write(str(s[1]))
+        ax.cla()
         with open(rel_path, 'wb') as f:
             pickle.dump(res, f)
 
@@ -90,6 +99,9 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
 
 if __name__ == "__main__":
     import numpy as np
+    import slam.plot_map as pm
+    import matplotlib.pyplot as plt
+
     odom_mul_r_dtheta = [
         np.square(np.diag([r_noise, dtheta_noise])) 
         for r_noise, dtheta_noise in [[0.1, 0.1], [0.2, 0.2], [0.3, 0.3], [0.4, 0.4], [0.5, 0.5]]
@@ -106,6 +118,6 @@ if __name__ == "__main__":
         for odom_cov in odom_mul_r_dtheta[:2]
     ]
 
-    sensor_data = sd.load_sensor_data('sim3.xz')
+    sensor_data = sd.load_sensor_data('corridor-w-light.xz')
 
     res = slam_batch(settings_collection, sensor_data, repeats=3, pool_processes=4)

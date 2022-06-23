@@ -153,7 +153,7 @@ def detect_landmarks(image: np.ndarray, camera_matrix: np.ndarray, distortion_co
             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),
             2)
 
-    return (image, list(zip([id[0] for id in ids], [(distance, angle, orientation) for angle, distance, orientation in zip(angles, distances, orientations)])))
+    return (image, list(zip([id[0] for id in ids], [np.array([distance, angle, orientation]) for angle, distance, orientation in zip(angles, distances, orientations)])))
 
 
 def rosbag_to_data(rosbag_path: os.PathLike, save_imgs=False) -> SensorData:
