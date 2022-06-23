@@ -41,7 +41,7 @@ def plot_pc(pc_plot_handle, scan: np.ndarray, pose: np.ndarray):
 
 def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(),
                      images_dir=None, realtime: bool = False, show_images: bool = False, stats_iter_size: int = 30,
-                     save_every: int = 1, video_name: str = "slam", start_time: float = 0):
+                     save_every: int = 1, video_name: str = "slam", start_time: float = 0, profile: bool = True):
     #if slam_settings.visualize is False:
     #    raise ValueError('Visualization must be enabled to use slam_sensor_data.')
 
@@ -79,14 +79,14 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
         sim_i = 0
         sim_N = len(data.sim_data.robot_pose)
         ts = data.sim_data.sampling_time
-
-    dt_iter = collections.deque([0.1], maxlen=stats_iter_size)
-    dt_sel = collections.deque([0.1], maxlen=stats_iter_size)
-    dt_lidar = collections.deque([0.1], maxlen=stats_iter_size)
-    dt_camera = collections.deque([0.1], maxlen=stats_iter_size)
-    dt_odometry = collections.deque([0.1], maxlen=stats_iter_size)
-    dt_draw = collections.deque([0.1], maxlen=stats_iter_size)
-    dt_save = collections.deque([0.1], maxlen=stats_iter_size)
+    if profile:
+        dt_iter = collections.deque([0.1], maxlen=stats_iter_size)
+        dt_sel = collections.deque([0.1], maxlen=stats_iter_size)
+        dt_lidar = collections.deque([0.1], maxlen=stats_iter_size)
+        dt_camera = collections.deque([0.1], maxlen=stats_iter_size)
+        dt_odometry = collections.deque([0.1], maxlen=stats_iter_size)
+        dt_draw = collections.deque([0.1], maxlen=stats_iter_size)
+        dt_save = collections.deque([0.1], maxlen=stats_iter_size)
 
     print_last_t = time.time()
     draw_last_t = time.time()
@@ -114,12 +114,13 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 actual_pose = data.sim_data.robot_pose[sim_i]
 
             t0 = time.time()
-            dt_sel.append(t0 - t0_iter)
-            dt_lidar.append(0)
-            dt_camera.append(0)
-            dt_odometry.append(0)
-            dt_draw.append(0)
-            dt_save.append(0)
+            if profile:
+                dt_sel.append(t0 - t0_iter)
+                dt_lidar.append(0)
+                dt_camera.append(0)
+                dt_odometry.append(0)
+                dt_draw.append(0)
+                dt_save.append(0)
             if it == 0:  # Lidar data incoming
                 i += 1
                 if t < start_time:
@@ -131,7 +132,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 for line in lines:
                     slammer.make_line_observation(t, (None, line))
                 plot_pc(pc_plot_handle, scan, slammer.pose_estimate())
-                dt_lidar[-1] = time.time() - t0
+                if profile:
+                    dt_lidar[-1] = time.time() - t0
 
             elif it == 1:  # Camera data incoming
                 j += 1
@@ -147,7 +149,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     slammer.make_unoriented_observation(t, (id, np.array([r, theta])))
                     #slammer.make_oriented_observation(t, (id, np.array([r, theta, psi])))
 
-                dt_camera[-1] = time.time() - t0
+                if profile:
+                    dt_camera[-1] = time.time() - t0
             elif it == 2:  # Odometry data incoming
                 k += 1
                 if t < start_time:
@@ -166,73 +169,75 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     slammer.perform_action(t, odom, actual_pose)
                 else:
                     slammer.perform_action(t, odom)
+                if profile:
+                    t1 = time.time()
+                    dt_odometry[-1] = t1 - t0
 
-                t1 = time.time()
-                dt_odometry[-1] = t1 - t0
-
-                # fig.canvas.draw()
-                t2 = time.time()
-                dt_draw[-1] = t2 - t1
+                    # fig.canvas.draw()
+                    t2 = time.time()
+                    dt_draw[-1] = t2 - t1
 
                 if images_dir is not None and (k % save_every == 0):
                     plt.savefig(os.path.join(images_dir, f"{k:06d}.png"))
 
-                t3 = time.time()
-                dt_save[-1] = t3 - t2
-
+                if profile:
+                    t3 = time.time()
+                    dt_save[-1] = t3 - t2
             tf = time.time()
-            dt_iter.append(tf - t0)
-            # Means only of iterations where operation was executed
-            t_iter_mean = np.mean(dt_iter)
-            t_sel_mean = np.mean(dt_sel)
-            with warnings.catch_warnings():
-                # Mean of empty slices returns nan and causes these warnings
-                # Replace nan with 0
-                warnings.filterwarnings('ignore', r'Mean of empty slice.')
-                warnings.filterwarnings('ignore', r'invalid value encountered in double_scalars')
-                t_lidar_mean = np.nan_to_num(np.mean([dt for dt in dt_lidar if dt != 0]))
-                t_cam_mean = np.nan_to_num(np.mean([dt for dt in dt_camera if dt != 0]))
-                t_odom_mean = np.nan_to_num(np.mean([dt for dt in dt_odometry if dt != 0]))
-                t_draw_mean = np.nan_to_num(np.mean([dt for dt in dt_draw if dt != 0]))
-                t_save_mean = np.nan_to_num(np.mean([dt for dt in dt_save if dt != 0]))
+            if profile:
+                dt_iter.append(tf - t0)
+                # Means only of iterations where operation was executed
+                t_iter_mean = np.mean(dt_iter)
+                t_sel_mean = np.mean(dt_sel)
+                with warnings.catch_warnings():
+                    # Mean of empty slices returns nan and causes these warnings
+                    # Replace nan with 0
+                    warnings.filterwarnings('ignore', r'Mean of empty slice.')
+                    warnings.filterwarnings('ignore', r'invalid value encountered in double_scalars')
+                    t_lidar_mean = np.nan_to_num(np.mean([dt for dt in dt_lidar if dt != 0]))
+                    t_cam_mean = np.nan_to_num(np.mean([dt for dt in dt_camera if dt != 0]))
+                    t_odom_mean = np.nan_to_num(np.mean([dt for dt in dt_odometry if dt != 0]))
+                    t_draw_mean = np.nan_to_num(np.mean([dt for dt in dt_draw if dt != 0]))
+                    t_save_mean = np.nan_to_num(np.mean([dt for dt in dt_save if dt != 0]))
 
-            # Percentages counting all iterations
-            t_iter_total = np.sum(dt_iter)
-            t_sel_percentage = 100*np.sum(dt_sel)/t_iter_total
-            t_lidar_percentage = 100*np.sum(dt_lidar)/t_iter_total
-            t_cam_percentage = 100*np.sum(dt_camera)/t_iter_total
-            t_odom_percentage = 100*np.sum(dt_odometry)/t_iter_total
-            t_draw_percentage = 100*np.sum(dt_draw)/t_iter_total
-            t_save_percentage = 100*np.sum(dt_save)/t_iter_total
+                # Percentages counting all iterations
+                t_iter_total = np.sum(dt_iter)
+                t_sel_percentage = 100*np.sum(dt_sel)/t_iter_total
+                t_lidar_percentage = 100*np.sum(dt_lidar)/t_iter_total
+                t_cam_percentage = 100*np.sum(dt_camera)/t_iter_total
+                t_odom_percentage = 100*np.sum(dt_odometry)/t_iter_total
+                t_draw_percentage = 100*np.sum(dt_draw)/t_iter_total
+                t_save_percentage = 100*np.sum(dt_save)/t_iter_total
 
             if tf - draw_last_t > target_draw_period:
                 draw_last_t = tf
                 if slam_settings.visualize:
                     slammer._draw()
-
-            if tf - print_last_t > 0.5:
-                print_last_t = tf
-                # \033[<N> A move cursor N lines up; \033[K clear until end of line
-                print(
-                    f"Iteration {i+j+k:06d}: Averages [ms]: total:{int(1000*t_iter_mean):04d} sel:{int(1000*t_sel_mean):04d}"
-                    f" lidar:{int(1000*t_lidar_mean):04d} cam:{int(1000*t_cam_mean):04d} odom:{int(1000*t_odom_mean):04d}"
-                    f" draw:{int(1000*t_draw_mean):04d} save:{int(1000*t_save_mean):04d}\033[K")
-                print(
-                    f"Ratios: sel:{t_sel_percentage:3.1f}% lidar:{t_lidar_percentage:3.1f}% cam:{t_cam_percentage:3.1f}% odom:{t_odom_percentage:3.1f}% draw:{t_draw_percentage:3.1f}% save:{t_save_percentage:3.1f}%\033[K")
-                print(
-                    f"Run time: {time.time()-true_t0:.1f}s Completed: {(t-start_time)/total_time*100:3.1f}%\033[K"
-                )
-                print('\033[3A', end='')
+            if profile:
+                if tf - print_last_t > 0.5:
+                    print_last_t = tf
+                    # \033[<N> A move cursor N lines up; \033[K clear until end of line
+                    print(
+                        f"Iteration {i+j+k:06d}: Averages [ms]: total:{int(1000*t_iter_mean):04d} sel:{int(1000*t_sel_mean):04d}"
+                        f" lidar:{int(1000*t_lidar_mean):04d} cam:{int(1000*t_cam_mean):04d} odom:{int(1000*t_odom_mean):04d}"
+                        f" draw:{int(1000*t_draw_mean):04d} save:{int(1000*t_save_mean):04d}\033[K")
+                    print(
+                        f"Ratios: sel:{t_sel_percentage:3.1f}% lidar:{t_lidar_percentage:3.1f}% cam:{t_cam_percentage:3.1f}% odom:{t_odom_percentage:3.1f}% draw:{t_draw_percentage:3.1f}% save:{t_save_percentage:3.1f}%\033[K")
+                    print(
+                        f"Run time: {time.time()-true_t0:.1f}s Completed: {(t-start_time)/total_time*100:3.1f}%\033[K"
+                    )
+                    print('\033[3A', end='')
     except KeyboardInterrupt:
         print('\nKeyboard interrupt. Exiting...')
     finally:
-        print('\n\n')
+        if profile:
+            print('\n\n')
         if video_name is not None and images_dir is not None:
             to_video(images_dir, video_name + ".mp4", fps=10)
-    #if slam_settings.visualize:
-    slammer._draw_map()
-    slammer._draw_location()
-    plt.show(block=True)
+    if slam_settings.visualize:
+        slammer._draw_map()
+        slammer._draw_location()
+        plt.show(block=True)
     return slammer.end()
 
 

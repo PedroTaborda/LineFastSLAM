@@ -2,7 +2,9 @@ from __future__ import annotations
 import os
 import pickle
 import lzma
-from dataclasses import dataclass, asdict
+import hashlib
+import struct
+from dataclasses import dataclass, asdict, field
 
 import numpy as np
 import cv2
@@ -42,6 +44,8 @@ class SensorData:
     from_rosbag: bool = False
     sim_data: SimulationData = None
 
+    _hash_str: str = field(default=None, init=False)
+
     def save(self, filename: str) -> None:
         """Save the sensor data to a file.
 
@@ -53,6 +57,40 @@ class SensorData:
     def __post_init__(self) -> None:
         if type(self.sim_data) is dict:
             self.sim_data = SimulationData(**self.sim_data)
+    
+    def hash_str(self):
+        if self._hash_str is not None:
+            return self._hash_str
+        hash_repr = hashlib.sha1(b"")
+        for t, arr in self.odometry:
+            arr.flags.writeable = False
+            tbytes =  bytearray(struct.pack("f", t))
+            arrbytes = arr.data
+            hash_repr.update(tbytes)
+            hash_repr.update(arrbytes)
+
+        for t, arr in self.lidar:
+            arr.flags.writeable = False
+            tbytes =  bytearray(struct.pack("f", t))
+            arrbytes = arr.data
+            hash_repr.update(tbytes)
+            hash_repr.update(arrbytes)
+        
+        for t, landmarks, compressed_image in self.camera:
+            tbytes =  bytearray(struct.pack("f", t))
+            hash_repr.update(tbytes)
+            for id, arr in landmarks:
+                idbytes =  bytearray(struct.pack("f", t))
+                hash_repr.update(idbytes)
+                arr.flags.writeable = False
+                arrbytes = arr.data
+                hash_repr.update(arrbytes)
+
+        self._hash_str = hash_repr.hexdigest()
+        return self._hash_str
+
+    def __hash__(self) -> int:
+        return int(self.hash_str(), 16)
 
 
 def load_sensor_data(filename: str, dir: os.PathLike=DEFAULT_SENSOR_DATA_DIR) -> SensorData:
