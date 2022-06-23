@@ -74,7 +74,6 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     if data.sim_data is not None:
         actual_map: usim.umap.UsimMap = data.sim_data.map
         for landmark_id in actual_map.landmarks:
-            break
             axes.scatter(actual_map.landmarks[landmark_id][0], actual_map.landmarks[landmark_id][1], c='k', marker='*')
 
         sim_i = 0

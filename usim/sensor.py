@@ -17,10 +17,10 @@ class SensorSettings:
     lidar_angular_resolution: float = 360       # Number of points in one full sweep
 
     # Sensor noise characterization
-    lidar_range_noise_sigma: float = 0          # Standard Deviation of Lidar Range Measurements
-    lidar_angular_noise_sigma: float = 0        # Standard Deviation of Lidar Angular Sweep Position
-    odometry_angular_noise_sigma: float = 0.1   # Standard Deviation of Odometry Angular Displacement
-    odometry_r_noise_sigma: float = 0.1         # Standard Deviation of Odometry Distance Displacement
+    lidar_range_noise_sigma: float = 0.1          # Relative Multiplicative Error
+    lidar_angular_noise_sigma: float = 0.2        # Additive Error in deg
+    odometry_angular_noise_sigma: float = 0.1   # Relative Multiplicative Error
+    odometry_r_noise_sigma: float = 0.1         # Relative Multiplicative Error
 
 class Sensor:
     def __init__(self, robot: Robot, map: UsimMap, sensor_parameters: SensorSettings = SensorSettings()) -> None:
@@ -147,8 +147,14 @@ class Sensor:
             wall_vector += [(np.linalg.norm(np.array([xi, yi])), np.arctan2(yi, xi), \
                              min(angle_0, angle_1), max(angle_0, angle_1))]
 
-
-        for idx, angle in enumerate(self.lidar_angles):
+        n = len(self.lidar_angles)
+        r_noise = np.random.normal(size=(n,), 
+            loc=0,
+            scale=self.lidar_range_noise_sigma)
+        angle_noise  = np.random.normal(size=(n,), 
+            loc=0,
+            scale=self.lidar_angular_noise_sigma)
+        for idx, angle in enumerate(self.lidar_angles + angle_noise):
             lidar_angle = np.deg2rad(angle + theta)
             ranges[idx] = np.inf
 
@@ -173,4 +179,4 @@ class Sensor:
             if ranges[idx] == np.inf:
                 ranges[idx] = 0     # means out of range
         
-        return ranges 
+        return ranges*(1+r_noise)

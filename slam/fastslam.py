@@ -229,19 +229,18 @@ class FastSLAM:
             self.estimated_trajectory_trail, = self.ax.plot(
                 [], [], c='C04', linewidth=0.5, label='Estimated trajectory')
 
-    def _draw_location(self, actual_location: np.ndarray = None) -> None:
+    def _draw_location(self) -> None:
         for idx, particle in enumerate(self.particles):
             particle._draw(self.particle_markers[idx])
-        if actual_location is not None:
-            self.actual_location_dot.set(offsets = [actual_location[:2]])
+        if self.actual_trajectory:
+            self.actual_location_dot.set(offsets = [self.actual_trajectory[-1][1][:2]])
 
         if self.settings.trajectory_trail:
             pose_estimate = self.pose_estimate()
-            if actual_location is not None:
-                prev_traj_actual = self.actual_trajectory_trail.get_data(orig=True)
-                self.actual_trajectory_trail.set_data(
-                    np.append(prev_traj_actual[0], actual_location[0]),
-                    np.append(prev_traj_actual[1], actual_location[1]))
+            if self.actual_trajectory:
+                actual_traj_posx = [tupl[1][0] for tupl in self.actual_trajectory]
+                actual_traj_posy = [tupl[1][1] for tupl in self.actual_trajectory]
+                self.actual_trajectory_trail.set_data(actual_traj_posx, actual_traj_posy)
             prev_traj_est = self.estimated_trajectory_trail.get_data(orig=True)
             self.estimated_trajectory_trail.set_data(
                 list(prev_traj_est[0]) + [pose_estimate[0]],

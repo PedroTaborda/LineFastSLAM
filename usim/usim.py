@@ -31,7 +31,10 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--map", type=str, default="map1.map")
     parser.add_argument("--sampling-time", type=float, default=0.1)
-    parser.add_argument("--sensor-sampling-time", type=float, default=0.1)
+    parser.add_argument("--sensor-sampling-time", type=float, default=0.1)    
+    parser.add_argument("--x-ini", type=float, default=0) 
+    parser.add_argument("--y-ini", type=float, default=0)
+    parser.add_argument("--heading-ini", type=float, default=0)
 
     args = parser.parse_args()
 
@@ -39,7 +42,7 @@ if __name__=="__main__":
     sensor_sampling_time = args.sensor_sampling_time
     map_file = args.map
 
-    robot = Robot(RobotSettings(), [0, 0, 0])
+    robot = Robot(RobotSettings(), [args.heading_ini, args.x_ini, args.y_ini])
     map = load_map(map_file)
     sensor = Sensor(robot=robot, map=map)
     odometry_data = []
