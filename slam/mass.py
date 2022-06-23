@@ -1,7 +1,11 @@
-import multiprocessing as mp
+import collections
 import os
 import pickle
 import copy
+import concurrent.futures
+import time
+import dataclasses
+
 from slam.action_model import ActionModelSettings
 
 import slam.fastslam as fs
@@ -15,7 +19,7 @@ def file_name(settings: fs.FastSLAMSettings, sensor_data: sd.SensorData) -> str:
     """
     Generate a file name for the given settings.
     """
-    return settings.hash_str() + sensor_data.hash_str()
+    return hex(int(settings.hash_str(), 16) + int(sensor_data.hash_str(), 16))[2:]
 
 def perform_slam(sensor_and_settings_obj: tuple[sd.SensorData, fs.FastSLAMSettings]):
     """
@@ -34,13 +38,14 @@ def perform_slam(sensor_and_settings_obj: tuple[sd.SensorData, fs.FastSLAMSettin
     return res
 
 def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData, 
-                repeats: int = 2, pool_processes: int = 4, results_dir = 'slammed') -> list[fs.FastSLAM]:
+                repeats: int = 2, pool_processes: int = None, results_dir = 'slammed',
+                stats_iter_size: int = 5) -> list[fs.FastSLAM]:
     """
     Run FastSLAM on a batch of settings, 'repeats' times per settings object.
     Returns a list of lists of fs.SLAMResult objects.
     Each list contains the results for one settings object for several seeds.
 
-    These results are stored in files, indexed by the settings object hash. # TODO: add hashing of sensor data object to make them unique.
+    These results are stored in files, indexed by the settings object hash.
     """
     expanded_settings = []
     for s in settings:
@@ -62,62 +67,201 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
             n_processed += 1
 
     print(f"Processing {len(to_process)} settings, {n_processed} already processed.")
+    if len(to_process) > 0:
+        fig, ax = plt.subplots(1, 1, )
+        with concurrent.futures.ProcessPoolExecutor(max_workers=pool_processes) as executor:
+            futures = [executor.submit(perform_slam, args_tuple) for args_tuple in to_process]
+            t0 = time.time()
+            dt_iter = collections.deque([t0], maxlen=stats_iter_size)
+            for i, res_future in enumerate(concurrent.futures.as_completed(futures)):
+                sensor_data, settings_inst = to_process[i]
+                dt_iter.append(time.time() - dt_iter[-1])
+                # print(f"Saving results for {file_name(s[1], sensor_data)}")
+                print(f"{i+1:05d}/{len(to_process):05d} Jobs done. {time.time() - t0:.3f}s elapsed", end="\n")
+                rel_path = os.path.join(results_dir, file_name(settings_inst, sensor_data))
+                
+                res = res_future.result()
 
-    pool = mp.Pool(processes=pool_processes)
-    results = pool.map(perform_slam, to_process)
+                traj = res.trajectory
+                for landmark in res.map.landmarks:
+                    try:
+                        res.map.landmarks[landmark].z_handle = None
+                        res.map.landmarks[landmark].std_ellipse = None
+                    except AttributeError:
+                        ...
 
-    fig, ax = plt.subplots(1, 1, )
-    for s, res in zip(to_process, results):
-        print(f"Saving results for {file_name(s[1], sensor_data)}")
-        rel_path = os.path.join(results_dir, file_name(s[1], sensor_data))
-        
-        traj = res.trajectory
-        map = res.map
-        pm.plot_map(map, traj, sensor_data, ax)
-        plt.savefig(rel_path+'.png', dpi=1000)
-        with open(rel_path + '.txt', 'w') as f:
-            f.write(str(s[1]))
-        ax.cla()
-        with open(rel_path, 'wb') as f:
-            pickle.dump(res, f)
-
+                pm.plot_map(res.map, traj, sensor_data, ax)
+                res.map._rm_plt_info()
+                plt.savefig(rel_path+'.png', dpi=1000)
+                with open(rel_path + '.txt', 'w') as f:
+                    f.write(str(settings_inst))
+                ax.cla()
+                # print(res.map.landmarks[-1].z_handle)
+                with open(rel_path, 'wb') as f:
+                    pickle.dump(copy.deepcopy((res, settings_inst)), f)
+        print(f"All jobs completed in {time.time() - t0:.3f} seconds. ({(time.time() - t0)/len(to_process):.3f} per job)")
+    print(f"Loading all results")    
     res_ret = []
     for s in settings:
         res_settings_lst = []
         for i in range(repeats):
             new_settings = copy.copy(s)
             new_settings.rng_seed = i
-            print(f"Loading results for {file_name(new_settings, sensor_data)}")
             rel_path = os.path.join(results_dir, file_name(new_settings, sensor_data))
             with open(rel_path, 'rb') as f:
-                res_settings_lst.append(pickle.load(f))
+                res_settings_lst.append(pickle.load(f)[0])
         res_ret.append(res_settings_lst)
-
     return res_ret
 
+def flatten_dict(dict1):
+    for key in list(dict1.keys()):
+        if isinstance(dict1[key], dict):
+            flatten_dict(dict1[key])
+            items = list(dict1[key].items())
+            dict1.pop(key)
+            for key, val in items:
+                dict1[key] = val
+    return dict1
+
+def dif_repr(settings_inst: fs.FastSLAMSettings()):
+    def_set_dict = flatten_dict(dataclasses.asdict(fs.FastSLAMSettings()))
+    settings_inst_dict = flatten_dict(dataclasses.asdict(settings_inst))
+    diff = []
+    for setting in settings_inst_dict:
+        if setting in ["visualize", "trajectory_trail", "map_type"]:
+            continue
+        if isinstance(settings_inst_dict[setting], np.ndarray):
+            if np.all(settings_inst_dict[setting] != def_set_dict[setting]):
+                diff.append(f"{setting}={settings_inst_dict[setting]}")
+        else:
+            if settings_inst_dict[setting] != def_set_dict[setting]:
+                diff.append(f"{setting}={settings_inst_dict[setting]}")
+    diff.sort()
+    if not diff:
+        return "default"
+    return (" ".join(diff)).replace("\n", "")
+
+def check_files(results_dir = 'slammed'):
+    results_dir = os.path.join('data', results_dir)
+    if not os.path.isdir(results_dir):
+        os.mkdir(results_dir)
+
+    def argsort(lst):
+        return sorted(range(len(lst)), key=lst.__getitem__)
+
+    files = os.listdir(results_dir)
+    files = [os.path.join(results_dir, file) for file in files if "." not in file] # ignore .txt, .png, etc (keep only data files)
+    characteristics = []
+    for file in files:
+        with open(file, 'rb') as f:
+            data, settings_inst = pickle.load(f)
+            characteristics.append(dif_repr(settings_inst))
+
+    for idx in argsort(characteristics):
+        print(f"{files[idx]} -> {characteristics[idx]}")
 
 
 if __name__ == "__main__":
     import numpy as np
     import slam.plot_map as pm
     import matplotlib.pyplot as plt
+    import argparse
+
+    def_set = fs.FastSLAMSettings()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--check-files", action='store_true'
+    )
+    parser.add_argument(
+        "--repeats", 
+        type=int, 
+        default=3,
+        help="Number of times to repeat the SLAM algorithm for a given context (settings and SensorData)"
+    )
+    parser.add_argument(
+        "--sensor-data", 
+        type=str, 
+        default="sim0.xz",
+        help="Name of file for SensorData object to apply SLAM onto"
+    )
+    parser.add_argument(
+        "--processes", 
+        default=None,
+        help="Maximum number of processes on which to run jobs. Default (None) uses the number of processors of the machine"
+    )
+    parser.add_argument(
+        "-N", 
+        type=int, 
+        nargs="+", 
+        default=[def_set.num_particles]
+    )
+    parser.add_argument(
+        "--action-model-noise", 
+        type=str, 
+        default=f"[[{def_set.action_model_settings.ODOM_MULT_COV[0, 0]}, {def_set.action_model_settings.ODOM_MULT_COV[1, 1]}]]"
+    )
+    parser.add_argument(
+        "-r-std", 
+        type=float, 
+        nargs="+", 
+        default=[def_set.r_std]
+    )
+    parser.add_argument(
+        "-phi-std", 
+        type=float, 
+        nargs="+", 
+        default=[def_set.phi_std]
+    )
+    parser.add_argument(
+        "-psi-std", 
+        type=float, 
+        nargs="+", 
+        default=[def_set.psi_std]
+    )
+    parser.add_argument(
+        "-r-std-line", 
+        type=float, 
+        nargs="+", 
+        default=[def_set.r_std_line]
+    )
+    parser.add_argument(
+        "-phi-std-line", 
+        type=float, 
+        nargs="+", 
+        default=[def_set.phi_std_line]
+    )
+    args = parser.parse_args()
+    if args.check_files:
+        check_files()
+        exit(0)
 
     odom_mul_r_dtheta = [
         np.square(np.diag([r_noise, dtheta_noise])) 
-        for r_noise, dtheta_noise in [[0.1, 0.1], [0.2, 0.2], [0.3, 0.3], [0.4, 0.4], [0.5, 0.5]]
+        for r_noise, dtheta_noise in eval(args.action_model_noise)
     ]
-    N = [10, 20, 50, 100, 200, 500]
+
     settings_collection = [
         fs.FastSLAMSettings(
             action_model_settings=ActionModelSettings(
                 ODOM_MULT_COV=odom_cov
             ),
             num_particles=n,
+            r_std=r_std,
+            phi_std=phi_std,
+            psi_std=psi_std,
+            r_std_line=r_std_line,
+            phi_std_line=phi_std_line,
         ) 
-        for n in N[:1]
-        for odom_cov in odom_mul_r_dtheta[:2]
+        for n in args.N
+        for odom_cov in odom_mul_r_dtheta
+        for r_std in args.r_std
+        for phi_std in args.phi_std
+        for psi_std in args.psi_std
+        for r_std_line in args.r_std_line
+        for phi_std_line in args.phi_std_line
     ]
 
-    sensor_data = sd.load_sensor_data('corridor-w-light.xz')
+    sensor_data = sd.load_sensor_data(args.sensor_data)
 
-    res = slam_batch(settings_collection, sensor_data, repeats=3, pool_processes=4)
+    res = slam_batch(settings_collection, sensor_data, repeats=args.repeats, pool_processes=args.processes)

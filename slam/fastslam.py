@@ -199,8 +199,7 @@ class FastSLAM:
         Returns:
             The final SLAM result.
         """
-        # TODO: definition of __reduce__ for pickling
-        map = self.map_estimate()
+        map = self.map_estimate()._rm_plt_info() # prepare map for pickling in order to remove matplotlib-caused huge pickled files
         trajectory_estimate = self.trajectory_estimate
         return SLAMResult(map=map, trajectory=trajectory_estimate)
 

@@ -136,13 +136,16 @@ class Landmark(EKF):
     def _undraw(self):
         if self.drawn:
             self.drawn = False
-            self.std_ellipse.remove()
-            self.z_handle.remove()
+            if hasattr(self, "std_ellipse"):
+                self.std_ellipse.remove()
+                self.std_ellipse = None
+            if hasattr(self, "z_handle"):
+                self.z_handle.remove()
+                self.z_handle = None
 
-    def __del__(self):
-        if self.drawn:
-            self.std_ellipse.remove()
-            self.z_handle.remove()
+    def _rm_plt_info(self):
+        self.z_handle = None
+        return self
 
 class OrientedLandmark(Landmark):
     def _draw(self, ax, actual_pos: np.ndarray=None, color_ellipse='C00', color_p='C01', color_z='C02'):
@@ -177,6 +180,11 @@ class OrientedLandmark(Landmark):
         # Plot latest observation
         self.z_handle.set(offsets=z[0:2])
 
+    def _rm_plt_info(self):
+        super()._rm_plt_info()
+        self.std_ellipse = None
+        return self
+
 class UnorientedLandmark(Landmark):
     def _draw(self, ax, actual_pos: np.ndarray=None, color_ellipse='C00', color_p='C01', color_z='C02'):
         """Draw the landmark on the given matplotlib axis.
@@ -209,6 +217,11 @@ class UnorientedLandmark(Landmark):
 
         # Plot latest observation
         self.z_handle.set(offsets=p)
+
+    def _rm_plt_info(self):
+        super()._rm_plt_info()
+        self.std_ellipse = None
+        return self
 
 class LineLandmark(Landmark):
     def __init__(self, settings: LandmarkSettings):
@@ -287,10 +300,7 @@ class LineLandmark(Landmark):
         if self.drawn:
             self.drawn = False
             self.z_handle.remove()
-
-    def __del__(self):
-        if self.drawn:
-            self.z_handle.remove()
+            self.z_handle = None
 
 class LandmarkType(Enum):
     """Type of observation."""
@@ -405,7 +415,11 @@ class Map:
     def _undraw(self):
         for landmark_id in self.landmarks:
             self.landmarks[landmark_id]._undraw()
-
+    
+    def _rm_plt_info(self):
+        for landmark_id in self.landmarks:
+            self.landmarks[landmark_id] = self.landmarks[landmark_id]._rm_plt_info()
+        return self
 
     def copy(self):
         return copy.copy(self)
