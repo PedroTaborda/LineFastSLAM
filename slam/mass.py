@@ -2,6 +2,7 @@ import multiprocessing as mp
 import os
 import pickle
 import copy
+from slam.action_model import ActionModelSettings
 
 import slam.fastslam as fs
 import slam.offline as offline
@@ -10,11 +11,11 @@ import sensor_data.sensor_data as sd
 if not os.path.isdir('data'):
     os.mkdir('data')
 
-def file_name(settings: fs.FastSLAMSettings) -> str:
+def file_name(settings: fs.FastSLAMSettings, sensor_data: sd.SensorData) -> str:
     """
     Generate a file name for the given settings.
     """
-    return settings.hash_str()
+    return settings.hash_str() + sensor_data.hash_str()
 
 def perform_slam(sensor_and_settings_obj: tuple[sd.SensorData, fs.FastSLAMSettings]):
     """
@@ -27,7 +28,8 @@ def perform_slam(sensor_and_settings_obj: tuple[sd.SensorData, fs.FastSLAMSettin
         images_dir=None,
         realtime=False,
         show_images=False,
-        stats_iter_size=1
+        stats_iter_size=1,
+        profile=False
     )
     return res
 
@@ -53,7 +55,7 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
     n_processed = 0
     to_process = []
     for s in expanded_settings:
-        rel_path = os.path.join(results_dir, file_name(s))
+        rel_path = os.path.join(results_dir, file_name(s, sensor_data))
         if not os.path.exists(rel_path):
             to_process.append((sensor_data, s))
         else:
@@ -65,8 +67,8 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
     results = pool.map(perform_slam, to_process)
 
     for s, res in zip(to_process, results):
-        print(f"Saving results for {file_name(s[1])}")
-        rel_path = os.path.join(results_dir, file_name(s[1]))
+        print(f"Saving results for {file_name(s[1], sensor_data)}")
+        rel_path = os.path.join(results_dir, file_name(s[1], sensor_data))
         with open(rel_path, 'wb') as f:
             pickle.dump(res, f)
 
@@ -74,10 +76,10 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
     for s in settings:
         res_settings_lst = []
         for i in range(repeats):
-            print(f"Loading results for {file_name(s)}")
             new_settings = copy.copy(s)
             new_settings.rng_seed = i
-            rel_path = os.path.join(results_dir, file_name(new_settings))
+            print(f"Loading results for {file_name(new_settings, sensor_data)}")
+            rel_path = os.path.join(results_dir, file_name(new_settings, sensor_data))
             with open(rel_path, 'rb') as f:
                 res_settings_lst.append(pickle.load(f))
         res_ret.append(res_settings_lst)
@@ -87,12 +89,23 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
 
 
 if __name__ == "__main__":
+    import numpy as np
+    odom_mul_r_dtheta = [
+        np.square(np.diag([r_noise, dtheta_noise])) 
+        for r_noise, dtheta_noise in [[0.1, 0.1], [0.2, 0.2], [0.3, 0.3], [0.4, 0.4], [0.5, 0.5]]
+    ]
+    N = [10, 20, 50, 100, 200, 500]
     settings_collection = [
         fs.FastSLAMSettings(
+            action_model_settings=ActionModelSettings(
+                ODOM_MULT_COV=odom_cov
+            ),
             num_particles=n,
-        ) for n in [5, 10]
+        ) 
+        for n in N[:1]
+        for odom_cov in odom_mul_r_dtheta[:2]
     ]
 
-    sensor_data = sd.load_sensor_data('sim5.xz')
+    sensor_data = sd.load_sensor_data('sim3.xz')
 
     res = slam_batch(settings_collection, sensor_data, repeats=3, pool_processes=4)
