@@ -44,7 +44,7 @@ class SensorData:
     from_rosbag: bool = False
     sim_data: SimulationData = None
 
-    _hash_str: str = field(default=None, init=False)
+    _hash_str: str = field(default=None, init=True)
 
     def save(self, filename: str) -> None:
         """Save the sensor data to a file.
