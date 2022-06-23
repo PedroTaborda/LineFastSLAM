@@ -167,6 +167,10 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import argparse
 
+    # examples
+    # python -m slam.mass --sensor-data simx.xz -N 1 2 3 
+    # python -m slam-mass --check-files
+
     def_set = fs.FastSLAMSettings()
 
     parser = argparse.ArgumentParser()
