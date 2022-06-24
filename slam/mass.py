@@ -6,6 +6,7 @@ import concurrent.futures
 import time
 import dataclasses
 
+import numpy as np
 from slam.action_model import ActionModelSettings
 
 import slam.fastslam as fs
@@ -21,7 +22,7 @@ def perform_slam(sensor_and_settings_obj: tuple[sd.SensorData, fs.FastSLAMSettin
     """
     Perform a single FastSLAM run with the given settings.
     """
-    sensor_data, settings = sensor_and_settings_obj
+    sensor_data, settings, t0, tf = sensor_and_settings_obj
     res = offline.slam_sensor_data(
         sensor_data, 
         slam_settings=settings,
@@ -30,13 +31,15 @@ def perform_slam(sensor_and_settings_obj: tuple[sd.SensorData, fs.FastSLAMSettin
         show_images=False,
         stats_iter_size=1,
         profile=False,
-        ignore_existing=False
+        ignore_existing=False,
+        start_time=t0,
+        final_time=tf
     )
     return res
 
 def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData, 
                 repeats: int = 2, pool_processes: int = None, results_dir = 'slammed',
-                stats_iter_size: int = 5) -> list[fs.FastSLAM]:
+                stats_iter_size: int = 5, t0: float = 0, tf: float = np.inf) -> list[fs.FastSLAM]:
     """
     Run FastSLAM on a batch of settings, 'repeats' times per settings object.
     Returns a list of lists of fs.SLAMResult objects.
@@ -59,7 +62,7 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
     for s in expanded_settings:
         rel_path = os.path.join(results_dir, offline.file_name(s, sensor_data))
         if not os.path.exists(rel_path):
-            to_process.append((sensor_data, s))
+            to_process.append((sensor_data, s, t0, tf))
         else:
             n_processed += 1
 
@@ -178,6 +181,16 @@ if __name__ == "__main__":
         default=[def_set.num_particles]
     )
     parser.add_argument(
+        "-t0", 
+        type=float, 
+        default=0
+    )
+    parser.add_argument(
+        "-tf", 
+        type=float, 
+        default=np.inf
+    )
+    parser.add_argument(
         "--action-model-noise-cov", 
         type=str, 
         default=f"[[{def_set.action_model_settings.ODOM_MULT_COV[0, 0]}, {def_set.action_model_settings.ODOM_MULT_COV[1, 1]}]]"
@@ -256,4 +269,4 @@ if __name__ == "__main__":
 
     sensor_data = sd.load_sensor_data(args.sensor_data)
 
-    res = slam_batch(settings_collection, sensor_data, repeats=args.repeats, pool_processes=args.processes)
+    res = slam_batch(settings_collection, sensor_data, repeats=args.repeats, pool_processes=args.processes, t0=args.t0, tf=args.tf)
