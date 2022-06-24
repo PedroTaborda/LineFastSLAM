@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-import ast
+import struct
 import hashlib
 from dataclasses import dataclass, field
 
@@ -33,7 +33,7 @@ class FastSLAMSettings:
     rng_seed: int = field(default=None, init=False)
 
     def __hash__(self) -> int:
-        return int(self.hash_hex(), 16)
+        return int(self.hash_str(), 16)
 
     def hash_str(self) -> str:        
         self.action_model_settings.ODOM_ADD_COV.flags.writeable = False
@@ -41,19 +41,23 @@ class FastSLAMSettings:
         self.landmark_settings.min_cov.flags.writeable = False
         # ast.parse(inspect.getsource(self.resampling_type)).body[0].value.string
         vars_to_hash =[
-            str(self.num_particles).encode(),
+            bytearray(struct.pack("f", self.num_particles)),
             self.action_model_settings.action_type.name.encode(),
+            self.action_model_settings.uncertainty_type.name.encode(),
+            self.action_model_settings.ODOM_ADD_MU.data,
             self.action_model_settings.ODOM_ADD_COV.data,
+            self.action_model_settings.ODOM_MULT_MU.data,
+            self.action_model_settings.ODOM_MULT_COV.data,
             self.landmark_settings.cov0.data,
             self.landmark_settings.min_cov.data,
             self.map_type.__name__.encode(),
             self.resampling_type.__name__.encode(),
-            str(self.r_std).encode(),
-            str(self.phi_std).encode(),
-            str(self.psi_std).encode(),
-            str(self.r_std_line).encode(),
-            str(self.phi_std_line).encode(),
-            str(self.rng_seed).encode()
+            bytearray(struct.pack("f", self.r_std)),
+            bytearray(struct.pack("f", self.phi_std)),
+            bytearray(struct.pack("f", self.psi_std)),
+            bytearray(struct.pack("f", self.r_std_line)),
+            bytearray(struct.pack("f", self.phi_std_line)),
+            bytearray(struct.pack("f", self.rng_seed))
         ]
         all_bytes_joined = b''.join(vars_to_hash)
         return hashlib.sha1(all_bytes_joined).hexdigest()
@@ -63,7 +67,6 @@ class SLAMResult:
     """Result of a FastSLAM run.
     """
     map: Map
-    particles: np.ndarray
     trajectory: np.ndarray
 
 class FastSLAM:
@@ -196,11 +199,9 @@ class FastSLAM:
         Returns:
             The final SLAM result.
         """
-        # TODO: definition of __reduce__ for pickling
-        map = None # self.map_estimate()
-        particles = None # self.particles 
+        map = self.map_estimate()._rm_plt_info() # prepare map for pickling in order to remove matplotlib-caused huge pickled files
         trajectory_estimate = self.trajectory_estimate
-        return SLAMResult(map=map, particles=particles, trajectory=trajectory_estimate)
+        return SLAMResult(map=map, trajectory=trajectory_estimate)
 
     def _normalize_particle_weights(self) -> None:
         weights = np.array([particle.weight for particle in self.particles])
@@ -229,19 +230,18 @@ class FastSLAM:
             self.estimated_trajectory_trail, = self.ax.plot(
                 [], [], c='C04', linewidth=0.5, label='Estimated trajectory')
 
-    def _draw_location(self, actual_location: np.ndarray = None) -> None:
+    def _draw_location(self) -> None:
         for idx, particle in enumerate(self.particles):
             particle._draw(self.particle_markers[idx])
-        if actual_location is not None:
-            self.actual_location_dot.set(offsets = [actual_location[:2]])
+        if self.actual_trajectory:
+            self.actual_location_dot.set(offsets = [self.actual_trajectory[-1][1][:2]])
 
         if self.settings.trajectory_trail:
             pose_estimate = self.pose_estimate()
-            if actual_location is not None:
-                prev_traj_actual = self.actual_trajectory_trail.get_data(orig=True)
-                self.actual_trajectory_trail.set_data(
-                    np.append(prev_traj_actual[0], actual_location[0]),
-                    np.append(prev_traj_actual[1], actual_location[1]))
+            if self.actual_trajectory:
+                actual_traj_posx = [tupl[1][0] for tupl in self.actual_trajectory]
+                actual_traj_posy = [tupl[1][1] for tupl in self.actual_trajectory]
+                self.actual_trajectory_trail.set_data(actual_traj_posx, actual_traj_posy)
             prev_traj_est = self.estimated_trajectory_trail.get_data(orig=True)
             self.estimated_trajectory_trail.set_data(
                 list(prev_traj_est[0]) + [pose_estimate[0]],

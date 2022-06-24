@@ -35,20 +35,27 @@ def plot():
     plt.draw()
 
 
+n_gain = np.diag([1, 4])
+parameters = [np.eye(2), n_gain]
 def act():
     global p, z
 
     # just to remove z from visible area
     z = np.array([-999, -999])
-    p = g(p, 0, rng.normal(size=(2,)))
-    myEKF.predict(0)
+    # Rotation  degrees per action
+    a = 15*np.pi/180
+    A = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+    m_gain = np.array([[0.9, 1.2], [1.2, 0.3]])
+    u = [A, m_gain]
+    p = g(p, u, rng.normal(size=(2,)))
+    myEKF.predict(u)
     plot()
 
 
 def obs():
     global z
 
-    z = h(p, rng.normal(size=(2,)))
+    z = h(p, parameters, rng.normal(size=(2,)))
     myEKF.update(z)
     plot()
 
@@ -75,27 +82,35 @@ if __name__ == "__main__":
     # Initial position
     p = np.array([10, 0])
     z = np.array([-999, -999])
-    # Rotation  degrees per time step
-    a = 15*np.pi/180
-    A = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
-    m_gain = np.array([[0.9, 1.2], [1.2, 0.3]])
-    n_gain = np.diag([1, 4])
 
-    def g(x, u, m):
-        # print(m)
-        return A @ x + m_gain @ m
+    def g(x, u, m=None):
+        A, m_gain = u
+        if m is None: return A @ x
+        return A @ x  + m_gain @ m
 
-    def Dgx(x, u, m): return A
-    def Dgm(x, u, m): return m_gain
-    def h(x, n): return x + n_gain @ n
-    def Dhx(x, n): return np.identity(2)
-    def Dhn(x, n): return n_gain
+    def Dgx(x, u):
+        A, m_gain = u
+        return A
+    def Dgm(x, u):
+        A, m_gain = u
+        return m_gain
+    def h(x, parameters, n=None):
+        C, n_gain = parameters 
+        if n is None: return C@x
+        return C@x + n_gain @ n
+    def Dhx(x, parameters):
+        C, n_gain = parameters 
+        return C
+    def Dhn(x, parameters):
+        C, n_gain = parameters
+        return n_gain
 
     x0 = p
     cov0 = np.diag([1, 3])
     EKFsets = EKFSettings(x0, cov0, g, Dgx, Dgm)
     myEKF = EKF(EKFsets)
     myEKF.set_sensor_model(h, Dhx, Dhn)
+    myEKF.set_parameters([np.eye(2), n_gain])
 
     fig, ax = plt.subplots(1, 1, figsize=(6, 6))
     est_ellipse: Ellipse = Ellipse((0, 0), 1, 1, facecolor='none', edgecolor='C00')
@@ -108,3 +123,4 @@ if __name__ == "__main__":
     # ax.axis('equal')
     plot()
     plt.show(block=False)
+    print("Run in interactive mode and use above functions")
