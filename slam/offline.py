@@ -41,7 +41,8 @@ def plot_pc(pc_plot_handle, scan: np.ndarray, pose: np.ndarray):
 
 def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(),
                      images_dir=None, realtime: bool = False, show_images: bool = False, stats_iter_size: int = 30,
-                     save_every: int = 1, video_name: str = "slam", start_time: float = 0, profile: bool = True):
+                     save_every: int = 1, video_name: str = "slam", start_time: float = 0, profile: bool = True,
+                     final_time: float = np.inf):
     #if slam_settings.visualize is False:
     #    raise ValueError('Visualization must be enabled to use slam_sensor_data.')
 
@@ -59,11 +60,13 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     k = 0
     
     if not data.camera:
-        data.camera = [(np.inf, (None, None, None))]
+        data.camera = [(max([data.lidar[-1][0], data.odometry[-1][0]]), (None, None, None))]
     t0_ros = [data.lidar[i+1][0], data.camera[j+1][0], data.odometry[k+1][0]
               ][np.argmin([data.lidar[i+1][0], data.camera[j+1][0], data.odometry[k+1][0]])]
     total_time = ([data.lidar[-1][0], data.camera[-1][0], data.odometry[-1][0]
               ][np.argmax([data.lidar[-1][0], data.camera[-1][0], data.odometry[-1][0]])] - t0_ros)/1e9
+    if total_time > final_time:
+        total_time = final_time
 
     def next_times():
         tlidar = data.lidar[i+1][0] if i+1 < len(data.lidar) else np.inf
@@ -126,7 +129,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 dt_save.append(0)
             if it == 0:  # Lidar data incoming
                 i += 1
-                if t < start_time:
+                if t < start_time or t > final_time:
                     continue
                 scan = data.lidar[i][1]
                 if data.sim_data is not None:  # TODO: re run sims and delete this code
@@ -140,7 +143,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
 
             elif it == 1:  # Camera data incoming
                 j += 1
-                if t < start_time:
+                if t < start_time or t > final_time:
                     continue
                 _, landmarks, CmpImg = data.camera[j]
                 if CmpImg is not None and show_images:
@@ -156,7 +159,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     dt_camera[-1] = time.time() - t0
             elif it == 2:  # Odometry data incoming
                 k += 1
-                if t < start_time:
+                if t < start_time or t > final_time:
                     continue
                 theta0, x0, y0 = data.odometry[k-1][1]
                 theta1, x1, y1 = data.odometry[k][1]
@@ -256,6 +259,7 @@ if __name__ == "__main__":
     parser.add_argument("--no-video", action="store_true")
     parser.add_argument("--save-every", type=int, default=1)
     parser.add_argument("-t0", type=float, default=0)
+    parser.add_argument("-tf", type=float, default=np.inf)
 
     args = parser.parse_args()
 
@@ -281,5 +285,6 @@ if __name__ == "__main__":
         show_images=args.show_images,
         save_every=args.save_every,
         video_name=args.video_name,
-        start_time=args.t0
+        start_time=args.t0,
+        final_time=args.tf
     )
