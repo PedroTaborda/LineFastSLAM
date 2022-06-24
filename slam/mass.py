@@ -178,9 +178,14 @@ if __name__ == "__main__":
         default=[def_set.num_particles]
     )
     parser.add_argument(
-        "--action-model-noise", 
+        "--action-model-noise-cov", 
         type=str, 
         default=f"[[{def_set.action_model_settings.ODOM_MULT_COV[0, 0]}, {def_set.action_model_settings.ODOM_MULT_COV[1, 1]}]]"
+    )
+    parser.add_argument(
+        "--action-model-noise-bias", 
+        type=str, 
+        default=f"[[{def_set.action_model_settings.ODOM_MULT_MU[0]}, {def_set.action_model_settings.ODOM_MULT_MU[1]}]]"
     )
     parser.add_argument(
         "-r-std", 
@@ -217,15 +222,20 @@ if __name__ == "__main__":
         check_files()
         exit(0)
 
-    odom_mul_r_dtheta = [
+    odom_mul_r_dtheta_cov = [
         np.square(np.diag([r_noise, dtheta_noise])) 
-        for r_noise, dtheta_noise in eval(args.action_model_noise)
+        for r_noise, dtheta_noise in eval(args.action_model_noise_cov)
+    ]
+    odom_mul_r_dtheta_mu = [
+        np.array([r_noise, dtheta_noise])
+        for r_noise, dtheta_noise in eval(args.action_model_noise_bias)
     ]
 
     settings_collection = [
         fs.FastSLAMSettings(
             action_model_settings=ActionModelSettings(
-                ODOM_MULT_COV=odom_cov
+                ODOM_MULT_COV=odom_cov,
+                ODOM_MULT_MU=odom_mu
             ),
             num_particles=n,
             r_std=r_std,
@@ -235,7 +245,8 @@ if __name__ == "__main__":
             phi_std_line=phi_std_line,
         ) 
         for n in args.N
-        for odom_cov in odom_mul_r_dtheta
+        for odom_cov in odom_mul_r_dtheta_cov
+        for odom_mu in odom_mul_r_dtheta_mu
         for r_std in args.r_std
         for phi_std in args.phi_std
         for psi_std in args.psi_std
