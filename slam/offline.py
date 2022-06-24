@@ -1,15 +1,18 @@
 import os
 import shutil
 import time
-from matplotlib import pyplot as plt
-
-import numpy as np
-from visualization_utils.mpl_video import to_video
-import cv2
-
+import copy
 import collections
 import warnings
+import pickle
+import slam.plot_map as pm
 
+import numpy as np
+from matplotlib import pyplot as plt
+import cv2
+
+
+from visualization_utils.mpl_video import to_video
 import slam.fastslam as fs
 import slam.action_model as am
 import sensor_data.sensor_data as sd
@@ -38,20 +41,53 @@ def plot_pc(pc_plot_handle, scan: np.ndarray, pose: np.ndarray):
         X, Y = pc_plot_handle.get_data()
         pc_plot_handle.set_data(np.concatenate([X, points_x]), np.concatenate([Y, points_y]))
 
+def file_name(settings: fs.FastSLAMSettings, sensor_data: sd.SensorData) -> str:
+    """
+    Generate a file name for the given settings.
+    """
+    return hex(int(settings.hash_str(), 16) + int(sensor_data.hash_str(), 16))[2:]
+
+def save_slam_result(path: os.PathLike, slam_result: fs.SLAMResult, settings: fs.FastSLAMSettings, sensor_data: sd.SensorData) -> None:
+    slam_result = copy.deepcopy(slam_result)
+    ax = plt.gca()
+    pm.plot_map(slam_result.map, slam_result.trajectory, sensor_data, ax)
+    plt.savefig(path+'.png', dpi=1000)
+    ax.cla()
+    with open(path + '.txt', 'w') as f:
+        f.write(str(settings))
+    slam_result.map._rm_plt_info()
+    with open(path, 'wb') as f:
+        pickle.dump((slam_result, settings), f)
+
+def load_slam_result(path: os.PathLike) -> tuple[fs.SLAMResult, fs.FastSLAMSettings]:
+    with open(path, 'rb') as f:
+        result_tuple = pickle.load(f)
+    return result_tuple
+
 
 def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = fs.FastSLAMSettings(),
                      images_dir=None, realtime: bool = False, show_images: bool = False, stats_iter_size: int = 30,
                      save_every: int = 1, video_name: str = "slam", start_time: float = 0, profile: bool = True,
-                     final_time: float = np.inf):
+                     final_time: float = np.inf, ignore_existing: bool = True, results_dir = 'slammed'):
     #if slam_settings.visualize is False:
     #    raise ValueError('Visualization must be enabled to use slam_sensor_data.')
+    results_dir = os.path.join('data', results_dir)
+    if not os.path.isdir(results_dir):
+        os.mkdir(results_dir)
+    
+    file_path = os.path.join(results_dir, file_name(slam_settings, data))
 
+    if os.path.exists(file_path):
+        if not ignore_existing:
+            print(f"Found existing results at {file_path}")
+            return load_slam_result(file_path)[0]
+        print("Ignored existing results")
+    
     if show_images:
         fig, (axes, cam_ax) = plt.subplots(2, 1, figsize=(10, 5))
     else:
         fig, axes = plt.subplots(1, 1, figsize=(10, 5), sharex=True, sharey=True)
 
-    # _, pc_ax = plt.subplots(1, 1, figsize=(10, 5))  # point cloud axes
     pc_ax = axes    # axes to draw point cloud map
     pc_plot_handle = pc_ax.plot([], [], markersize=0.1, linestyle='', marker='.', c='#000000', zorder=-10)[0]
     axes: plt.Axes
@@ -132,8 +168,6 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 if t < start_time or t > final_time:
                     continue
                 scan = data.lidar[i][1]
-                if data.sim_data is not None:  # TODO: re run sims and delete this code
-                    scan[scan > 3.49] = 0.0
                 lines = identify_lines(scan)
                 for line in lines:
                     slammer.make_line_observation(t, (None, line))
@@ -244,7 +278,10 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
         slammer._draw_map()
         slammer._draw_location()
         plt.show(block=True)
-    return slammer.end()
+
+    slam_result = slammer.end()
+    save_slam_result(file_path, slam_result, slam_settings, data)
+    return slam_result
 
 
 if __name__ == "__main__":
@@ -286,5 +323,6 @@ if __name__ == "__main__":
         save_every=args.save_every,
         video_name=args.video_name,
         start_time=args.t0,
-        final_time=args.tf
+        final_time=args.tf,
+        ignore_existing=False
     )

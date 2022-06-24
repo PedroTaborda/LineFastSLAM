@@ -57,7 +57,7 @@ class FastSLAMSettings:
             bytearray(struct.pack("f", self.psi_std)),
             bytearray(struct.pack("f", self.r_std_line)),
             bytearray(struct.pack("f", self.phi_std_line)),
-            bytearray(struct.pack("f", self.rng_seed))
+            bytearray(struct.pack("f", self.rng_seed if self.rng_seed is not None else -1))
         ]
         all_bytes_joined = b''.join(vars_to_hash)
         return hashlib.sha1(all_bytes_joined).hexdigest()
@@ -199,7 +199,7 @@ class FastSLAM:
         Returns:
             The final SLAM result.
         """
-        map = self.map_estimate()._rm_plt_info() # prepare map for pickling in order to remove matplotlib-caused huge pickled files
+        map = self.map_estimate() # prepare map for pickling in order to remove matplotlib-caused huge pickled files
         trajectory_estimate = self.trajectory_estimate
         return SLAMResult(map=map, trajectory=trajectory_estimate)
 

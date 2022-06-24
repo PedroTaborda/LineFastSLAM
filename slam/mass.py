@@ -11,15 +11,11 @@ from slam.action_model import ActionModelSettings
 import slam.fastslam as fs
 import slam.offline as offline
 import sensor_data.sensor_data as sd
+import slam.plot_map as pm
+import matplotlib.pyplot as plt
 
 if not os.path.isdir('data'):
     os.mkdir('data')
-
-def file_name(settings: fs.FastSLAMSettings, sensor_data: sd.SensorData) -> str:
-    """
-    Generate a file name for the given settings.
-    """
-    return hex(int(settings.hash_str(), 16) + int(sensor_data.hash_str(), 16))[2:]
 
 def perform_slam(sensor_and_settings_obj: tuple[sd.SensorData, fs.FastSLAMSettings]):
     """
@@ -33,7 +29,8 @@ def perform_slam(sensor_and_settings_obj: tuple[sd.SensorData, fs.FastSLAMSettin
         realtime=False,
         show_images=False,
         stats_iter_size=1,
-        profile=False
+        profile=False,
+        ignore_existing=False
     )
     return res
 
@@ -60,7 +57,7 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
     n_processed = 0
     to_process = []
     for s in expanded_settings:
-        rel_path = os.path.join(results_dir, file_name(s, sensor_data))
+        rel_path = os.path.join(results_dir, offline.file_name(s, sensor_data))
         if not os.path.exists(rel_path):
             to_process.append((sensor_data, s))
         else:
@@ -68,7 +65,6 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
 
     print(f"Processing {len(to_process)} settings, {n_processed} already processed.")
     if len(to_process) > 0:
-        fig, ax = plt.subplots(1, 1, )
         with concurrent.futures.ProcessPoolExecutor(max_workers=pool_processes) as executor:
             futures = [executor.submit(perform_slam, args_tuple) for args_tuple in to_process]
             t0 = time.time()
@@ -78,27 +74,11 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
                 dt_iter.append(time.time() - dt_iter[-1])
                 # print(f"Saving results for {file_name(s[1], sensor_data)}")
                 print(f"{i+1:05d}/{len(to_process):05d} Jobs done. {time.time() - t0:.3f}s elapsed", end="\n")
-                rel_path = os.path.join(results_dir, file_name(settings_inst, sensor_data))
+                rel_path = os.path.join(results_dir, offline.file_name(settings_inst, sensor_data))
                 
                 res = res_future.result()
-
-                traj = res.trajectory
-                for landmark in res.map.landmarks:
-                    try:
-                        res.map.landmarks[landmark].z_handle = None
-                        res.map.landmarks[landmark].std_ellipse = None
-                    except AttributeError:
-                        ...
-
-                pm.plot_map(res.map, traj, sensor_data, ax)
-                res.map._rm_plt_info()
-                plt.savefig(rel_path+'.png', dpi=1000)
-                with open(rel_path + '.txt', 'w') as f:
-                    f.write(str(settings_inst))
-                ax.cla()
-                # print(res.map.landmarks[-1].z_handle)
-                with open(rel_path, 'wb') as f:
-                    pickle.dump(copy.deepcopy((res, settings_inst)), f)
+                if not os.path.exists(rel_path):
+                    offline.save_slam_result(rel_path, res, settings_inst, sensor_data)
         print(f"All jobs completed in {time.time() - t0:.3f} seconds. ({(time.time() - t0)/len(to_process):.3f} per job)")
     print(f"Loading all results")    
     res_ret = []
@@ -107,9 +87,8 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
         for i in range(repeats):
             new_settings = copy.copy(s)
             new_settings.rng_seed = i
-            rel_path = os.path.join(results_dir, file_name(new_settings, sensor_data))
-            with open(rel_path, 'rb') as f:
-                res_settings_lst.append(pickle.load(f)[0])
+            rel_path = os.path.join(results_dir, offline.file_name(new_settings, sensor_data))
+            res = offline.load_slam_result(rel_path)
         res_ret.append(res_settings_lst)
     return res_ret
 
@@ -163,8 +142,6 @@ def check_files(results_dir = 'slammed'):
 
 if __name__ == "__main__":
     import numpy as np
-    import slam.plot_map as pm
-    import matplotlib.pyplot as plt
     import argparse
 
     # examples
