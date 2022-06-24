@@ -57,6 +57,9 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     slammer = fs.FastSLAM(slam_settings, axes)
     i = j = -1
     k = 0
+    
+    if not data.camera:
+        data.camera = [(np.inf, (None, None, None))]
     t0_ros = [data.lidar[i+1][0], data.camera[j+1][0], data.odometry[k+1][0]
               ][np.argmin([data.lidar[i+1][0], data.camera[j+1][0], data.odometry[k+1][0]])]
     total_time = ([data.lidar[-1][0], data.camera[-1][0], data.odometry[-1][0]
@@ -92,7 +95,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     print_last_t = time.time()
     draw_last_t = time.time()
 
-    target_draw_period = 1/5
+    target_draw_period = 1
 
     #print('\n\n')  # because print code starts by going two lines up
     try:
@@ -145,7 +148,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                     cam_ax.imshow(cv2.cvtColor(Img, cv2.COLOR_BGR2RGB))
                 for id, z in landmarks:
                     r, theta, psi = z
-                    slammer.make_unoriented_observation(t, (id, np.array([r, theta])))
+                    #slammer.make_unoriented_observation(t, (id, np.array([r, theta])))
                     #slammer.make_oriented_observation(t, (id, np.array([r, theta, psi])))
 
                 dt_camera[-1] = time.time() - t0
