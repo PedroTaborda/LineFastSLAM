@@ -295,6 +295,7 @@ if __name__ == "__main__":
     parser.add_argument("--video-name", type=str, default='slam')
     parser.add_argument("--no-video", action="store_true")
     parser.add_argument("--save-every", type=int, default=1)
+    parser.add_argument("--overwrite", type=bool, default=False)
     parser.add_argument("-t0", type=float, default=0)
     parser.add_argument("-tf", type=float, default=np.inf)
 
@@ -324,5 +325,5 @@ if __name__ == "__main__":
         video_name=args.video_name,
         start_time=args.t0,
         final_time=args.tf,
-        ignore_existing=False
+        ignore_existing=args.overwrite
     )
