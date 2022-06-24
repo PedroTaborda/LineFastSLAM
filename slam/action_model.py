@@ -28,7 +28,7 @@ class ActionModelSettings:
     ODOM_ADD_MU: np.ndarray = np.zeros((2,))    # adds to r, delta_theta
     ODOM_ADD_COV: np.ndarray = np.square(np.diag([0.1, 10*np.pi/180]))
 
-    ODOM_MULT_MU: np.ndarray = np.array([1, 0.95])  # multiplies with r, delta_theta
+    ODOM_MULT_MU: np.ndarray = np.array([1, 1])  # multiplies with r, delta_theta
     ODOM_MULT_COV: np.ndarray = np.square(np.diag([0.1, 0.5]))
 
 
