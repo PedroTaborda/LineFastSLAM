@@ -277,6 +277,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     if slam_settings.visualize:
         slammer._draw_map()
         slammer._draw_location()
+        print("Done")
         plt.show(block=True)
 
     slam_result = slammer.end()
