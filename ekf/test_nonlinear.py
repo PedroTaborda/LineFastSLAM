@@ -117,7 +117,7 @@ def h_inv(z, parameters):
 def get_Dhx(x, parameters):
     s, theta, n_gain = parameters
     dx, dy = x - s
-    r = np.linalg.norm(x)
+    r = np.linalg.norm(x-s)
     return np.array([[dx/r,  dy/r], [-dy/r ** 2, dx/r ** 2]])
 
 def get_Dhn(x, parameters):
