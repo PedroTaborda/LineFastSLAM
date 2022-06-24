@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import shutil
 import time
@@ -5,8 +6,6 @@ import copy
 import collections
 import warnings
 import pickle
-import slam.plot_map as pm
-
 import numpy as np
 from matplotlib import pyplot as plt
 import cv2
@@ -14,6 +13,7 @@ import cv2
 
 from visualization_utils.mpl_video import to_video
 import slam.fastslam as fs
+import slam.plot_map as pm
 import slam.action_model as am
 import sensor_data.sensor_data as sd
 import usim.umap
