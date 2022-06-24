@@ -122,11 +122,11 @@ class FastSLAM:
         Args:
             observation: The observation data as a tuple of (id, [r (m), phi (rad), psi(rad)])
         """
-        for particle in self.particles:
-            particle.make_unoriented_observation(obs_data, self.n_gain[0:2, 0:2])
+        changed_mask = np.empty((len(self.particles),), dtype=bool)
+        for i, particle in enumerate(self.particles):
+            changed_mask[i] = particle.make_oriented_observation(obs_data, self.n_gain[:2, :2])
 
-        self._normalize_particle_weights()
-        _ = 1  # for debug purposes
+        self._normalize_some_particle_weights(changed_mask)
 
         if t < self.cur_time:
             print(
@@ -139,11 +139,11 @@ class FastSLAM:
         Args:
             observation: The observation data as a tuple of (id, [r (m), phi (rad), psi(rad)])
         """
-        for particle in self.particles:
-            particle.make_oriented_observation(obs_data, self.n_gain)
+        changed_mask = np.empty((len(self.particles),), dtype=bool)
+        for i, particle in enumerate(self.particles):
+            changed_mask[i] = particle.make_oriented_observation(obs_data, self.n_gain)
 
-        self._normalize_particle_weights()
-        _ = 1  # for debug purposes
+        self._normalize_some_particle_weights(changed_mask)
 
         if t < self.cur_time:
             print(
@@ -157,11 +157,11 @@ class FastSLAM:
             observation: The observation data as a tuple of (id, [rh (m), th (rad)])
                     representing a line in the map.
         """
-        for particle in self.particles:
-            particle.make_line_observation(obs_data, self.n_gain_line)
+        changed_mask = np.empty((len(self.particles),), dtype=bool)
+        for i, particle in enumerate(self.particles):
+            changed_mask[i] = particle.make_line_observation(obs_data, self.n_gain_line)
 
-        self._normalize_particle_weights()
-        _ = 1  # for debug purposes
+        self._normalize_some_particle_weights(changed_mask)
 
         if t < self.cur_time:
             print(
@@ -206,6 +206,15 @@ class FastSLAM:
     def _normalize_particle_weights(self) -> None:
         weights = np.array([particle.weight for particle in self.particles])
         weights = weights / weights.sum()
+        for i, particle in enumerate(self.particles):
+            particle.weight = weights[i]
+
+    def _normalize_some_particle_weights(self, changed_mask : np.ndarray(dtype=bool)) -> None:  
+        """ Keeps not changed_mask particles with same probability, normalizes the rest.
+            Assumes that the weights summed to 1 before being changed
+        """      
+        weights = np.array([particle.weight for particle in self.particles])
+        weights[changed_mask] = (1 - weights[~changed_mask].sum()) * weights[changed_mask] / weights[changed_mask].sum()
         for i, particle in enumerate(self.particles):
             particle.weight = weights[i]
 

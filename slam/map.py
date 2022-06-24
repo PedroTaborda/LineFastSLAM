@@ -362,7 +362,7 @@ class Map:
 
             self.landmarks[obs.landmark_id] = obs.type.value(landmark_settings)
             self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
-            return 1.0
+            return None
         else:
             #self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
             likelyhood = self.landmarks[obs.landmark_id].get_likelihood(obs.z, diff=diff, parameters=parameters, normalize=False)

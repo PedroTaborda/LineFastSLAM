@@ -3,6 +3,7 @@ from cmath import inf
 
 from typing import Callable
 import copy
+from unicodedata import ucd_3_2_0
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,8 +13,11 @@ from slam.map import OrientedLandmarkSettings, Map, Observation, UnorientedObser
 import scipy.stats
 import time
 
-def diff(rh_th1, rh_th2):
+def diff_t1(rh_th1, rh_th2):
     return np.array([rh_th1[0] - rh_th2[0], np.mod(rh_th1[1] - rh_th2[1] + np.pi, 2*np.pi) - np.pi])
+
+def diff_t2(rh_th1, rh_th2):
+    return np.block([rh_th1[:2] - rh_th2[:2], np.mod(rh_th1[2] - rh_th2[2] + np.pi, 2*np.pi) - np.pi])
 
 
 def h_uo(x, parameters):    # z is observed position of landmark in robot's reference frame
@@ -100,7 +104,8 @@ class Particle:
 
         Side effects:
             -The map is updated with the observation (a landmark may be added)
-            -The particle's weight is updated
+            -The particle's weight is updated (possibly)
+        Returns True if particle's weight was updated
         """
 
         px, py, theta = self.pose
@@ -115,7 +120,7 @@ class Particle:
         observed_lines_keys = [landmark for landmark in observed_landmarks if landmark < 0]      
         best_MahDistSqr, best_key = inf, 0
         for key in observed_lines_keys:
-            MahDistSqr = self.map.landmarks[key].get_Mahalanobis_squared(np.array([rh, th]), diff = diff, parameters = parameters)
+            MahDistSqr = self.map.landmarks[key].get_Mahalanobis_squared(np.array([rh, th]), diff = diff_t1, parameters = parameters)
             if MahDistSqr < best_MahDistSqr:
                 best_MahDistSqr, best_key = MahDistSqr, key
         landmark_id = best_key
@@ -131,14 +136,19 @@ class Particle:
             get_Dhx=get_Dhx_line,
             get_Dhn=get_Dhn_line
         )
-        self.weight *= self.map.update(obs, diff = diff, parameters = parameters)
+        update_factor = self.map.update(obs, diff = diff_t1, parameters = parameters)
+        if update_factor is None:
+            return False
+        self.weight *= update_factor
+        return True
         
     def make_unoriented_observation(self, obs_data: tuple[int, tuple[float, float]], n_gain: np.ndarray) -> None:
         """Make an observation of a landmark on the map.
 
         Side effects:
             -The map is updated with the observation (a landmark may be added)
-            -The particle's weight is updated
+            -The particle's weight is updated (possibly)
+        Returns True if particle's weight was updated
         """
         px, py, theta = self.pose
         
@@ -155,7 +165,11 @@ class Particle:
             get_Dhx=get_Dhx_uo,
             get_Dhn=get_Dhn_uo,
         )
-        self.weight *= self.map.update(obs, parameters = parameters)
+        update_factor = self.map.update(obs, parameters = parameters)
+        if update_factor is None:
+            return False
+        self.weight *= update_factor
+        return True
 
     def make_oriented_observation(self, obs_data: tuple[int, tuple[float, float, float]], n_gain: np.ndarray) -> None:
         """Make an observation of a landmark on the map, considering that the landmark is an Aruco.
@@ -179,7 +193,11 @@ class Particle:
             get_Dhx=get_Dhx_o,
             get_Dhn=get_Dhn_o,
         )
-        self.weight *= self.map.update(obs, parameters=parameters)
+        update_factor = self.map.update(obs,  diff = diff_t2, parameters=parameters)        
+        if update_factor is None:
+            return False
+        self.weight *= update_factor
+        return True
 
     def copy(self) -> Particle:
         """Copy the particle, creating a new particle sharing the same map.
