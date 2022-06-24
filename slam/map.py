@@ -13,7 +13,7 @@ from matplotlib.patches import Ellipse
 from ekf.ekf import EKF, EKFSettings
 from visualization_utils.mpl_video import to_video
 
-def default_g(x, u, m):
+def default_g(x, u):
     return x
 
 def default_gDgx(x, u):
@@ -33,7 +33,7 @@ def h_inv_line(z, parameters):
         x = -rh_world, np.mod(th_world + 2*np.pi, 2*np.pi) - np.pi
     return np.array(x)
     
-def h_line(x, n, parameters):
+def h_line(x, parameters):
     p, theta, R, lidar_vector, n_gain = parameters
     rh_world, th_world = x
     th_robot = np.mod(th_world - theta + np.pi, 2*np.pi) - np.pi
@@ -42,7 +42,7 @@ def h_line(x, n, parameters):
     z = [rh_robot, th_robot]
     if rh_robot < 0:
         z = [-rh_robot, np.mod(th_robot + 2*np.pi, 2*np.pi) - np.pi]
-    return np.array(z) + n_gain @ n
+    return np.array(z)
 
 def get_Dhx_line(x, parameters):
     p, theta, R, lidar_vector, n_gain = parameters
@@ -128,10 +128,22 @@ class Landmark(EKF):
     def predict(self):
         super().predict(u=0)
 
-    def update(self, zx, parameters=None, **kwargs): # zx is z with x coords
-        super().update(self.h(zx, np.zeros_like(zx), parameters=parameters), parameters=parameters, **kwargs)
+    def update(self, zx, parameters=None, **kwargs): # zx is z with x coords 
+        if parameters is not None:
+            super().set_parameters(parameters)
+        super().update(self.h(zx, parameters=parameters), **kwargs)
         self.latest_zx = zx
         self.seen_counter += 1
+
+    def get_Mahalanobis_squared(self, z, diff=..., parameters=None, **kwargs):
+        if parameters is not None:
+            super().set_parameters(parameters)
+        return super().get_Mahalanobis_squared(z, diff, **kwargs)
+
+    def get_likelihood(self, z, diff=..., parameters = None, **kwargs):
+        if parameters is not None:
+            super().set_parameters(parameters)
+        return super().get_likelihood(z, diff, **kwargs)
 
     def _undraw(self):
         if self.drawn:
@@ -224,56 +236,6 @@ class UnorientedLandmark(Landmark):
         return self
 
 class LineLandmark(Landmark):
-    def __init__(self, settings: LandmarkSettings):
-        super().__init__(settings)
-        self.zero_m = np.array([0, 0])
-        self.zero_n = np.array([0, 0])
-        self.parameters = None
-
-    def update(self, zx, diff=lambda x,y : x - y, parameters=None):
-        super().update(zx, diff=diff, parameters=parameters)
-
-        if (not self.parameters and parameters) or not all([(self.parameters[i]==parameters[i]).all() for i in range(len(parameters))]):
-            self.parameters = parameters
-
-            self.Dhx = self.get_Dhx(self.mu, parameters)
-            # Get sensitivity to measurement noise
-            self.Dhn = self.get_Dhn(self.mu, parameters)
-            # Variance of expected measurements
-            self.zhat_cov = self.Dhx @ self.cov @ self.Dhx.T
-            # Expected measurement
-            self.zhat_mu = self.h(self.mu, self.zero_n, self.parameters)
-
-            self.total_cov = self.zhat_cov + self.Dhn @ self.Dhn.T
-            self.inv_total_cov = np.linalg.inv(self.total_cov)
-            self.normalizing_factor = np.linalg.det(2 * np.pi * self.total_cov)**(-1/2)
-
-
-    def get_likelihood(self, z, diff=lambda x, y: x - y, parameters=None):
-        if (not self.parameters and parameters) or not all([(self.parameters[i]==parameters[i]).all() for i in range(len(parameters))]):
-            self.parameters = parameters
-
-            self.Dhx = self.get_Dhx(self.mu, parameters)
-            # Get sensitivity to measurement noise
-            self.Dhn = self.get_Dhn(self.mu, parameters)
-            # Variance of expected measurements
-            self.zhat_cov = self.Dhx @ self.cov @ self.Dhx.T
-            # Expected measurement
-            self.zhat_mu = self.h(self.mu, self.zero_n, self.parameters)
-
-            self.total_cov = self.zhat_cov + self.Dhn @ self.Dhn.T
-            self.inv_total_cov = np.linalg.inv(self.total_cov)
-            self.normalizing_factor = np.linalg.det(2 * np.pi * self.total_cov)**(-1/2)
-        # Replace with the pdf expression because the scipy implementation is too slow.
-        p =  self.normalizing_factor \
-            * np.exp(-1/2 * diff(z, self.zhat_mu).T @ self.inv_total_cov @ diff(z, self.zhat_mu))
-        if p == 0:
-            # \033[<N>B moves cursor N lines down, in case cursor is not at end of console
-            #print("\033[99B\r[WARNING] Likelihood is 0")
-            return 0.00001
-        return p
-
-
     def _draw(self, ax, actual_pos: np.ndarray=None, color_ellipse='C00', color_p='C01', color_z='C02'):
         """Draw the landmark on the given matplotlib axis.
 
@@ -403,7 +365,7 @@ class Map:
             return 1.0
         else:
             #self.landmarks[obs.landmark_id].set_sensor_model(obs.h, obs.get_Dhx, obs.get_Dhn)
-            likelyhood = self.landmarks[obs.landmark_id].get_likelihood(obs.z, diff=diff, parameters=parameters)
+            likelyhood = self.landmarks[obs.landmark_id].get_likelihood(obs.z, diff=diff, parameters=parameters, normalize=False)
             self.landmarks[obs.landmark_id].update(obs.h_inv(obs.z, parameters=parameters), diff=diff, parameters=parameters)
             return likelyhood
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from cmath import inf
 
 from typing import Callable
 import copy
@@ -15,7 +16,7 @@ def diff(rh_th1, rh_th2):
     return np.array([rh_th1[0] - rh_th2[0], np.mod(rh_th1[1] - rh_th2[1] + np.pi, 2*np.pi) - np.pi])
 
 
-def h_uo(x, n, parameters):    # z is observed position of landmark in robot's reference frame
+def h_uo(x, parameters):    # z is observed position of landmark in robot's reference frame
     p, R, n_gain = parameters
     z_no_noise = R @ (x - p)
     return z_no_noise
@@ -33,7 +34,7 @@ def get_Dhn_uo(x, parameters):
     z = R @ (x - p)
     return np.array([[z[0], -z[1]], [z[1], z[0]]]) @ n_gain
         
-def h_o(x, n, parameters):    # z is observed position of landmark in robot's reference frame
+def h_o(x, parameters):    # z is observed position of landmark in robot's reference frame
     p, theta, R, n_gain = parameters
     x_prime = x[0:2]
     psi_prime = x[2]
@@ -112,14 +113,14 @@ class Particle:
 
         observed_landmarks = self.map.landmarks
         observed_lines_keys = [landmark for landmark in observed_landmarks if landmark < 0]      
-        max_likelihood, best_key = 0, 0
+        best_MahDistSqr, best_key = inf, 0
         for key in observed_lines_keys:
-            likelihood = self.map.landmarks[key].get_likelihood(np.array([rh, th]), diff = diff, parameters = parameters)
-            if likelihood > max_likelihood:
-                max_likelihood, best_key = likelihood, key
+            MahDistSqr = self.map.landmarks[key].get_Mahalanobis_squared(np.array([rh, th]), diff = diff, parameters = parameters)
+            if MahDistSqr < best_MahDistSqr:
+                best_MahDistSqr, best_key = MahDistSqr, key
         landmark_id = best_key
 
-        if max_likelihood < 0.2:
+        if best_MahDistSqr > 3*3:
             landmark_id = min(observed_lines_keys) - 1 if observed_lines_keys else -1
 
         obs = LineObservation(
