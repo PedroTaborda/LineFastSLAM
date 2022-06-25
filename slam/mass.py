@@ -131,20 +131,32 @@ def dif_repr(settings_inst: fs.FastSLAMSettings()):
         return "default"
     return (" ".join(diff)).replace("\n", "")
 
-def check_files(results_dir = 'slammed'):
+def check_files(results_dir = 'slammed', sensor_data: sd.SensorData = None):
     results_dir = os.path.join('data', results_dir)
+    ignore_dir = os.path.join('data', 'slammed_ignore')
     if not os.path.isdir(results_dir):
         os.mkdir(results_dir)
-
-    def argsort(lst):
-        return sorted(range(len(lst)), key=lst.__getitem__)
+    if not os.path.isdir(ignore_dir):
+        os.mkdir(ignore_dir)
 
     files = os.listdir(results_dir)
     files = [os.path.join(results_dir, file) for file in files if "." not in file] # ignore .txt, .png, etc (keep only data files)
     for idx, file in enumerate(files):
+        name = os.path.basename(file)
         with open(file, 'rb') as f:
             data, settings_inst = pickle.load(f)
-            print(f"{files[idx]+'.png'} -> {dif_repr(settings_inst)}")
+        if 'num_particles=11' in dif_repr(settings_inst):
+            to_move = [files[idx], files[idx] +'.png', files[idx] +'.txt']
+            new_names = [os.path.join(ignore_dir, os.path.basename(basename)) for basename in to_move]
+            # print(f"{to_move=}")
+            # print(f"{new_names=}")
+            for file_to_move, new_name in zip(to_move, new_names):
+                os.rename(file_to_move, new_name)
+            print(f"{files[idx]} moved")
+        if sensor_data is not None and name != offline.file_name(settings_inst, sensor_data):
+            print("Skipping file for different sensor data")
+            continue
+        print(f"{files[idx]+'.png'} -> {dif_repr(settings_inst)}")
 
 
 
@@ -242,8 +254,10 @@ if __name__ == "__main__":
         default=[def_set.phi_std_line]
     )
     args = parser.parse_args()
+    
+    sensor_data = sd.load_sensor_data(args.sensor_data)
     if args.check_files:
-        check_files()
+        check_files(sensor_data=sensor_data)
         exit(0)
 
     odom_mul_r_dtheta_cov = [
@@ -280,6 +294,5 @@ if __name__ == "__main__":
         for phi_std_line in args.phi_std_line
     ]
 
-    sensor_data = sd.load_sensor_data(args.sensor_data)
 
     res = slam_batch(settings_collection, sensor_data, repeats=args.repeats, pool_processes=args.processes, multiprocess=not args.sequential)
