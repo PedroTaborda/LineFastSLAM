@@ -28,6 +28,8 @@ class FastSLAMSettings:
     psi_std: float = 5*np.pi/180
     r_std_line: float = 0.08
     phi_std_line: float = 10*np.pi/180
+    t0: float = 0.0
+    tf: float = np.inf
     visualize: bool = False
     trajectory_trail: bool = False
     rng_seed: int = field(default=None, init=False)
@@ -52,6 +54,8 @@ class FastSLAMSettings:
             self.landmark_settings.min_cov.data,
             self.map_type.__name__.encode(),
             self.resampling_type.__name__.encode(),
+            # bytearray(struct.pack("f", self.t0)),
+            # bytearray(struct.pack("f", self.tf)),
             bytearray(struct.pack("f", self.r_std)),
             bytearray(struct.pack("f", self.phi_std)),
             bytearray(struct.pack("f", self.psi_std)),

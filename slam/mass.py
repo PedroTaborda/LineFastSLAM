@@ -1,5 +1,6 @@
 from __future__ import annotations
 import collections
+from multiprocessing import pool
 import os
 import pickle
 import copy
@@ -13,7 +14,6 @@ from slam.action_model import ActionModelSettings
 import slam.fastslam as fs
 import slam.offline as offline
 import sensor_data.sensor_data as sd
-import slam.plot_map as pm
 import matplotlib.pyplot as plt
 
 if not os.path.isdir('data'):
@@ -23,7 +23,7 @@ def perform_slam(sensor_and_settings_obj: tuple[sd.SensorData, fs.FastSLAMSettin
     """
     Perform a single FastSLAM run with the given settings.
     """
-    sensor_data, settings, t0, tf = sensor_and_settings_obj
+    sensor_data, settings = sensor_and_settings_obj
     res = offline.slam_sensor_data(
         sensor_data, 
         slam_settings=settings,
@@ -33,14 +33,14 @@ def perform_slam(sensor_and_settings_obj: tuple[sd.SensorData, fs.FastSLAMSettin
         stats_iter_size=1,
         profile=False,
         ignore_existing=False,
-        start_time=t0,
-        final_time=tf
+        start_time=settings.t0,
+        final_time=settings.tf
     )
     return res
 
 def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData, 
                 repeats: int = 2, pool_processes: int = None, results_dir = 'slammed',
-                stats_iter_size: int = 5, t0: float = 0, tf: float = np.inf) -> list[fs.FastSLAM]:
+                stats_iter_size: int = 5, multiprocess:bool = False) -> list[fs.FastSLAM]:
     """
     Run FastSLAM on a batch of settings, 'repeats' times per settings object.
     Returns a list of lists of fs.SLAMResult objects.
@@ -63,16 +63,16 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
     for s in expanded_settings:
         rel_path = os.path.join(results_dir, offline.file_name(s, sensor_data))
         if not os.path.exists(rel_path):
-            to_process.append((sensor_data, s, t0, tf))
+            to_process.append((sensor_data, s))
         else:
             n_processed += 1
 
     print(f"Processing {len(to_process)} settings, {n_processed} already processed.")
-    if len(to_process) > 0:
+    t0 = time.time()
+    dt_iter = collections.deque([t0], maxlen=stats_iter_size)
+    if len(to_process) > 0 and multiprocess:
         with concurrent.futures.ProcessPoolExecutor(max_workers=pool_processes) as executor:
             futures = [executor.submit(perform_slam, args_tuple) for args_tuple in to_process]
-            t0 = time.time()
-            dt_iter = collections.deque([t0], maxlen=stats_iter_size)
             for i, res_future in enumerate(concurrent.futures.as_completed(futures)):
                 sensor_data, settings_inst = to_process[i]
                 dt_iter.append(time.time() - dt_iter[-1])
@@ -83,7 +83,14 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
                 res = res_future.result()
                 if not os.path.exists(rel_path):
                     offline.save_slam_result(rel_path, res, settings_inst, sensor_data)
-        print(f"All jobs completed in {time.time() - t0:.3f} seconds. ({(time.time() - t0)/len(to_process):.3f} per job)")
+        print(f"All jobs completed in {time.time() - t0:.3f} seconds. ({(time.time() - t0)/len(to_process):.3f}s per job)")
+    else:
+        for i, args in enumerate(to_process):
+            sensor_data, settings_inst = args
+            dt_iter.append(time.time() - dt_iter[-1])
+            perform_slam(args)
+            print(f"{i+1:05d}/{len(to_process):05d} Jobs done. {time.time() - t0:.3f}s elapsed", end="\n")
+        print(f"All jobs completed in {time.time() - t0:.3f} seconds. ({(time.time() - t0)/len(to_process):.3f}s per job)")
     print(f"Loading all results")    
     res_ret = []
     for s in settings:
@@ -134,14 +141,11 @@ def check_files(results_dir = 'slammed'):
 
     files = os.listdir(results_dir)
     files = [os.path.join(results_dir, file) for file in files if "." not in file] # ignore .txt, .png, etc (keep only data files)
-    characteristics = []
-    for file in files:
+    for idx, file in enumerate(files):
         with open(file, 'rb') as f:
             data, settings_inst = pickle.load(f)
-            characteristics.append(dif_repr(settings_inst))
+            print(f"{files[idx]+'.png'} -> {dif_repr(settings_inst)}")
 
-    for idx in argsort(characteristics):
-        print(f"{files[idx]+'.png'} -> {characteristics[idx]}")
 
 
 if __name__ == "__main__":
@@ -175,6 +179,11 @@ if __name__ == "__main__":
         type=int, 
         default=None,
         help="Maximum number of processes on which to run jobs. Default (None) uses the number of processors of the machine"
+    )
+    parser.add_argument(
+        "--sequential", 
+        action="store_true",
+        help="Whether to sequentially perform the tasks"
     )
     parser.add_argument(
         "-N", 
@@ -258,6 +267,8 @@ if __name__ == "__main__":
             psi_std=psi_std,
             r_std_line=r_std_line,
             phi_std_line=phi_std_line,
+            t0=args.t0,
+            tf=args.tf
         ) 
         for n in args.N
         for odom_cov in odom_mul_r_dtheta_cov
@@ -271,4 +282,4 @@ if __name__ == "__main__":
 
     sensor_data = sd.load_sensor_data(args.sensor_data)
 
-    res = slam_batch(settings_collection, sensor_data, repeats=args.repeats, pool_processes=args.processes, t0=args.t0, tf=args.tf)
+    res = slam_batch(settings_collection, sensor_data, repeats=args.repeats, pool_processes=args.processes, multiprocess=not args.sequential)

@@ -284,6 +284,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
         print("Done: ", end='')
         mt.show_typical_dists(slam_result.map)
         plt.show(block=True)
+    plt.close(fig)
     return slam_result
 
 
