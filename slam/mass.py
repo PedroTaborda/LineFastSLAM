@@ -145,7 +145,7 @@ def check_files(results_dir = 'slammed', sensor_data: sd.SensorData = None):
         name = os.path.basename(file)
         with open(file, 'rb') as f:
             data, settings_inst = pickle.load(f)
-        if 'num_particles=11' in dif_repr(settings_inst):
+        if False: #'num_particles=11' in dif_repr(settings_inst):
             to_move = [files[idx], files[idx] +'.png', files[idx] +'.txt']
             new_names = [os.path.join(ignore_dir, os.path.basename(basename)) for basename in to_move]
             # print(f"{to_move=}")
