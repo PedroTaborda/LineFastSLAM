@@ -172,6 +172,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--processes", 
+        type=int, 
         default=None,
         help="Maximum number of processes on which to run jobs. Default (None) uses the number of processors of the machine"
     )
