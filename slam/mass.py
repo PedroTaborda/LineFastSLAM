@@ -141,7 +141,7 @@ def check_files(results_dir = 'slammed'):
             characteristics.append(dif_repr(settings_inst))
 
     for idx in argsort(characteristics):
-        print(f"{files[idx]} -> {characteristics[idx]}")
+        print(f"{files[idx]+'.png'} -> {characteristics[idx]}")
 
 
 if __name__ == "__main__":
