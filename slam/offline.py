@@ -13,7 +13,7 @@ import cv2
 
 from visualization_utils.mpl_video import to_video
 import slam.fastslam as fs
-import slam.plot_map as pm
+import slam.merit_tests as mt
 import slam.action_model as am
 import sensor_data.sensor_data as sd
 import usim.umap
@@ -50,7 +50,7 @@ def file_name(settings: fs.FastSLAMSettings, sensor_data: sd.SensorData) -> str:
 def save_slam_result(path: os.PathLike, slam_result: fs.SLAMResult, settings: fs.FastSLAMSettings, sensor_data: sd.SensorData) -> None:
     slam_result = copy.deepcopy(slam_result)
     ax = plt.gca()
-    pm.plot_map(slam_result.map, slam_result.trajectory, sensor_data, ax)
+    mt.plot_map(slam_result.map, slam_result.trajectory, sensor_data, ax)
     plt.savefig(path+'.png', dpi=1000)
     ax.cla()
     with open(path + '.txt', 'w') as f:
@@ -274,14 +274,16 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
             print('\n\n')
         if video_name is not None and images_dir is not None:
             to_video(images_dir, video_name + ".mp4", fps=10)
-    if slam_settings.visualize:
-        slammer._draw_map()
-        slammer._draw_location()
-        print("Done")
-        plt.show(block=True)
 
     slam_result = slammer.end()
     save_slam_result(file_path, slam_result, slam_settings, data)
+    
+    if slam_settings.visualize:
+        slammer._draw_map()
+        slammer._draw_location()
+        print("Done: ", end='')
+        mt.show_typical_dists(slam_result.map)
+        plt.show(block=True)
     return slam_result
 
 
