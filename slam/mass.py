@@ -162,6 +162,24 @@ def check_files(results_dir = 'slammed', sensor_data: sd.SensorData = None):
         print(f"{files[idx]+'.png'} {simulated} -> {dif_repr(settings_inst)}")
 
 
+def load_files_where(cond: Callable[[fs.SLAMResult, fs.FastSLAMSettings], bool], results_dir = 'slammed') -> list[tuple[fs.SLAMResult, fs.FastSLAMSettings]]:
+    results_dir = os.path.join('data', results_dir)
+    ignore_dir = os.path.join('data', 'slammed_ignore')
+    if not os.path.isdir(results_dir):
+        os.mkdir(results_dir)
+    if not os.path.isdir(ignore_dir):
+        os.mkdir(ignore_dir)
+
+    files = os.listdir(results_dir)
+    files = [os.path.join(results_dir, file) for file in files if "." not in file] # ignore .txt, .png, etc (keep only data files)
+    results_tuple_to_return = []
+    for idx, file in enumerate(files):
+        name = os.path.basename(file)
+        with open(file, 'rb') as f:
+            data, settings_inst = pickle.load(f)
+        if cond(data, settings_inst):
+            results_tuple_to_return.append((data, settings_inst))
+    return results_tuple_to_return
 
 if __name__ == "__main__":
     import numpy as np
