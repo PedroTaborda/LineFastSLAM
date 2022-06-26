@@ -12,12 +12,12 @@ N_exp = " ".join([str(n) for n in [10, 20, 50, 100, 200]])
 
 action_model_noise_theta_bias_exp = [
     [r_bias_default, theta_bias]
-    for theta_bias in np.linspace(0.8, 1.2, 5, endpoint=True)
+    for theta_bias in np.linspace(0.9, 1.1, 5, endpoint=True)
 ]
 
 action_model_noise_r_bias_exp = [
     [r_bias, theta_bias_default]
-    for r_bias in np.linspace(0.8, 1.2, 5, endpoint=True)
+    for r_bias in np.linspace(0.9, 1, 5, endpoint=True)
 ]
 
 action_model_noise_var_r_exp = [

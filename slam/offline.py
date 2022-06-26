@@ -50,7 +50,7 @@ def file_name(settings: fs.FastSLAMSettings, sensor_data: sd.SensorData) -> str:
 def save_slam_result(path: os.PathLike, slam_result: fs.SLAMResult, settings: fs.FastSLAMSettings, sensor_data: sd.SensorData) -> None:
     slam_result = copy.deepcopy(slam_result)
     ax = plt.gca()
-    mt.plot_map(slam_result.map, slam_result.trajectory, sensor_data, ax)
+    mt.plot_map(slam_result.map, slam_result.trajectory, sensor_data, ax, t0=settings.t0, tf=settings.tf)
     plt.savefig(path+'.png', dpi=1000)
     ax.cla()
     with open(path + '.txt', 'w') as f:
@@ -96,7 +96,7 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
     k = 0
     
     if not data.camera:
-        data.camera = [(max([data.lidar[-1][0], data.odometry[-1][0]]), (None, None, None))]
+        data.camera = [(max([data.lidar[-1][0], data.odometry[-1][0]]) + 100, (None, None, None))]
     t0_ros = [data.lidar[i+1][0], data.camera[j+1][0], data.odometry[k+1][0]
               ][np.argmin([data.lidar[i+1][0], data.camera[j+1][0], data.odometry[k+1][0]])]
     total_time = ([data.lidar[-1][0], data.camera[-1][0], data.odometry[-1][0]
@@ -316,6 +316,8 @@ if __name__ == "__main__":
         num_particles=args.N,
         visualize=not args.no_visualize,
         trajectory_trail=True,
+        t0=args.t0,
+        tf=args.tf
     )
     if args.no_video:
         images_dir = None
@@ -331,3 +333,6 @@ if __name__ == "__main__":
         final_time=args.tf,
         ignore_existing=args.overwrite
     )
+
+    print(f'Corridor length is {mt.get_corridor_length(res.map)}')
+    print(f'Corridor width is {mt.get_corridor_width(res.map)}')
