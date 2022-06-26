@@ -1,6 +1,5 @@
 from __future__ import annotations
 import collections
-from multiprocessing import pool
 import os
 import pickle
 import copy
