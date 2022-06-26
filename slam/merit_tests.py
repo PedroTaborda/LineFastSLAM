@@ -80,8 +80,8 @@ def traj_mse(slam_result: fs.SLAMResult):
     actual_trajectory: list[tuple[float, np.ndarray]] = slam_result.actual_trajectory
     estimated_trajectory: list[tuple[float, np.ndarray]] = slam_result.trajectory
 
-    def diff_t2(rh_th1, rh_th2):
-        return np.block([rh_th1[:2] - rh_th2[:2], np.mod(rh_th1[2] - rh_th2[2] + np.pi, 2*np.pi) - np.pi])
+    def diff_t2(rh_th1_actual, rh_th2):
+        return np.block([rh_th1_actual[:2] - rh_th2[:2], (np.mod(rh_th1_actual[2]*np.pi/180 - rh_th2[2] + np.pi, 2*np.pi) - np.pi)*180/np.pi])
 
     if len(actual_trajectory) != len(estimated_trajectory):
         raise ValueError(f"Actual trajectory and estimated trajectory have different lengths ({len(actual_trajectory)} and {len(estimated_trajectory)})")
@@ -124,22 +124,24 @@ if __name__ == "__main__":
 
         rmsexyt_n = []
         for res, settings in res_tuples:
-            _, _, mse = traj_mse(res)
+            t, errorxyt, mse = traj_mse(res)
             rmsexyt_n.append(mse)
             print(f"{mass.dif_repr(settings)}: mse= {rmsexyt_n[-1]}")
 
         rmsexyt[i] = np.mean(rmsexyt_n, axis=0)
 
+    FilePath = os.path.join('data', "slammed", "188d835b3d44f5225dcdcb34152ca9e31995d474f")
+
     print(f"{rmsexyt}")
     fig, ax = plt.subplots(1, 1)
 
-    linex = ax.plot(N, rmsexyt[:, 0], label="x", color="C00")[0]
-    liney = ax.plot(N, rmsexyt[:, 1], label="y", color="C01")[0]
+    linex = ax.plot(N, rmsexyt[:, 0], label="x", color="C00", marker=".")[0]
+    liney = ax.plot(N, rmsexyt[:, 1], label="y", color="C01", marker=".")[0]
     ax.set_xscale('log')
 
     ax2 = ax.twinx()
     ax2.yaxis.tick_right()
-    linet = ax2.plot(N, rmsexyt[:, 2], label="theta", color="C02")[0]
+    linet = ax2.plot(N, rmsexyt[:, 2], label="theta", color="C02", marker=".")[0]
 
     # ax2.legend()
     # ax.legend()
@@ -154,7 +156,7 @@ if __name__ == "__main__":
     ax2.set_ylabel("RMSE ($^o$)")
 
     ax.set_ylim([0, ax.get_ylim()[1]])
-    ax2.set_ylim([0, 2])
+    ax2.set_ylim([0, 12])
 
     plt.legend((linex, liney, linet), ('x', 'y', 'theta'))
     # ax.set_position([0.1, 0.1, 0.87, 0.88])
