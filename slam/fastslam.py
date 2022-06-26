@@ -71,7 +71,8 @@ class SLAMResult:
     """Result of a FastSLAM run.
     """
     map: Map
-    trajectory: np.ndarray
+    trajectory: list[tuple(int, np.ndarray)]
+    actual_trajectory: list[tuple(int, np.ndarray)] = None
 
 class FastSLAM:
     def __init__(self, settings: FastSLAMSettings = FastSLAMSettings(), ax: plt.Axes = None) -> None:
@@ -206,7 +207,8 @@ class FastSLAM:
         """
         map = self.map_estimate() # prepare map for pickling in order to remove matplotlib-caused huge pickled files
         trajectory_estimate = self.trajectory_estimate
-        return SLAMResult(map=map, trajectory=trajectory_estimate)
+        actual_trajectory = self.actual_trajectory if self.actual_trajectory else None
+        return SLAMResult(map=map, trajectory=trajectory_estimate, actual_trajectory=actual_trajectory)
 
     def _normalize_particle_weights(self) -> None:
         weights = np.array([particle.weight for particle in self.particles])
