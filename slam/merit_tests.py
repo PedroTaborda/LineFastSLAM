@@ -9,6 +9,7 @@ import sensor_data.sensor_data as sd
 import slam.offline as off
 import slam.fastslam as fs
 import slam.map as sm
+import slam.mass as mass
 
 
 def plot_map(estimated_map: sm.Map, trajectory: list[tuple[int, np.ndarray]], sensor_data: sd.SensorData, ax: plt.Axes):
@@ -74,14 +75,87 @@ def show_typical_dists(map : sm.Map):
     closest = get_closest_dists(map, [15.78, 1.70])
 
     print(f"The closest distances are {closest}")
+
+def traj_mse(slam_result: fs.SLAMResult):
+    actual_trajectory: list[tuple[float, np.ndarray]] = slam_result.actual_trajectory
+    estimated_trajectory: list[tuple[float, np.ndarray]] = slam_result.trajectory
+
+    def diff_t2(rh_th1, rh_th2):
+        return np.block([rh_th1[:2] - rh_th2[:2], np.mod(rh_th1[2] - rh_th2[2] + np.pi, 2*np.pi) - np.pi])
+
+    if len(actual_trajectory) != len(estimated_trajectory):
+        raise ValueError(f"Actual trajectory and estimated trajectory have different lengths ({len(actual_trajectory)} and {len(estimated_trajectory)})")
     
+    errorxyt = np.zeros((len(actual_trajectory), 3))
+    time = np.zeros((len(actual_trajectory),))
+    for idx, ((t, actual_pose), (_, estimated_pose)) in enumerate(zip(actual_trajectory, estimated_trajectory)):
+        errorxyt[idx, :] = diff_t2(actual_pose, estimated_pose) # x
+        time[idx] = t
+    
+    rmsexyt = np.sqrt(np.square(errorxyt).mean(axis=0))
+    return time, errorxyt, rmsexyt
+
+
 if __name__ == "__main__":
     import argparse 
     parser = argparse.ArgumentParser()
     parser.add_argument("--file", type=str, default='b401e317ef90bc8dea8fdda348700e6d6f55cc79')
     args = parser.parse_args()
 
-    FilePath = os.path.join('data', "slammed", args.file)
-    result, settings = load_slam_result(FilePath)
-    print(f"The map has {len(result.map.landmarks)} landmarks. ", end='')
-    show_typical_dists(result.map)
+    if False:
+        FilePath = os.path.join('data', "slammed", args.file)
+        result, settings = load_slam_result(FilePath)
+        print(f"The map has {len(result.map.landmarks)} landmarks. ", end='')
+        show_typical_dists(result.map)
+    
+
+    N = [2, 5, 10, 20, 50, 100]
+
+    rmsexyt = np.zeros((len(N),3))
+    
+    def has_n(N):
+        def has_this_n(slam_res, settings):
+            return slam_res.actual_trajectory is not None and settings.num_particles == N;  
+        return has_this_n
+
+    for i, n in enumerate(N):
+        res_tuples = mass.load_files_where(has_n(n))
+        print(f"N={n}")
+
+        rmsexyt_n = []
+        for res, settings in res_tuples:
+            _, _, mse = traj_mse(res)
+            rmsexyt_n.append(mse)
+            print(f"{mass.dif_repr(settings)}: mse= {rmsexyt_n[-1]}")
+
+        rmsexyt[i] = np.mean(rmsexyt_n, axis=0)
+
+    print(f"{rmsexyt}")
+    fig, ax = plt.subplots(1, 1)
+
+    linex = ax.plot(N, rmsexyt[:, 0], label="x", color="C00")[0]
+    liney = ax.plot(N, rmsexyt[:, 1], label="y", color="C01")[0]
+    ax.set_xscale('log')
+
+    ax2 = ax.twinx()
+    ax2.yaxis.tick_right()
+    linet = ax2.plot(N, rmsexyt[:, 2], label="theta", color="C02")[0]
+
+    # ax2.legend()
+    # ax.legend()
+    ax.set_xticklabels(N)
+    ax.set_xticks(N)
+    ax2.spines['right'].set_color("C02")
+    ax2.yaxis.label.set_color("C02")
+    ax2.tick_params(axis='y', colors='C02')
+
+    ax.set_xlabel("$N$")
+    ax.set_ylabel("RMSE (m)")
+    ax2.set_ylabel("RMSE ($^o$)")
+
+    ax.set_ylim([0, ax.get_ylim()[1]])
+    ax2.set_ylim([0, 2])
+
+    plt.legend((linex, liney, linet), ('x', 'y', 'theta'))
+    # ax.set_position([0.1, 0.1, 0.87, 0.88])
+    plt.show()
