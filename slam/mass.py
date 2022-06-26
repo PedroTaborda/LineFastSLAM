@@ -13,6 +13,7 @@ from slam.action_model import ActionModelSettings
 
 import slam.fastslam as fs
 import slam.offline as offline
+import slam.merit_tests as mt
 import sensor_data.sensor_data as sd
 import matplotlib.pyplot as plt
 
@@ -60,12 +61,14 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
         os.mkdir(results_dir)
     n_processed = 0
     to_process = []
+    to_classify = []
     for s in expanded_settings:
         rel_path = os.path.join(results_dir, offline.file_name(s, sensor_data))
         if not os.path.exists(rel_path):
             to_process.append((sensor_data, s))
         else:
             n_processed += 1
+            to_classify.append((sensor_data, s))
 
     print(f"Processing {len(to_process)} settings, {n_processed} already processed.")
     t0 = time.time()
@@ -102,6 +105,38 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
             rel_path = os.path.join(results_dir, offline.file_name(new_settings, sensor_data))
             res = offline.load_slam_result(rel_path)
         res_ret.append(res)
+
+    i = 0;
+    while os.path.exists(f'experiment{i}.csv'):
+        i += 1
+
+    classication_file = open(f'experiment{i}.csv', 'w')
+    classication_file.write('N, Action R Std, Action Theta Std, Action R Bias, Action Theta Bias, LIDAR R Std, LIDAR Phi Std, Corridor Lenght, Corridor Width\n')
+    for experiment in to_classify:
+        sensor_data, settings = experiment
+        rel_path = os.path.join(results_dir, offline.file_name(settings, sensor_data))
+        res = offline.load_slam_result(rel_path)[0]
+
+        plt.figure()
+        ax = plt.axes()
+        mt.plot_map(res.map, res.trajectory, sensor_data, ax, settings.t0, settings.tf)
+        plt.show(block=False)
+        print('Is this map good? [y/n]')
+        answer = ''
+        while not (answer := input().strip()) in ['y', 'n']:
+            print('Either type y or n.')
+
+        classication_file.write(f'{settings.num_particles}, {settings.action_model_settings.ODOM_MULT_COV[0,0]},\
+{settings.action_model_settings.ODOM_MULT_COV[1,1]}, {settings.action_model_settings.ODOM_MULT_MU[0]},\
+{settings.action_model_settings.ODOM_MULT_MU[1]}, {settings.r_std_line}, {settings.phi_std_line*180/np.pi},')
+        if answer == 'y':
+            classication_file.write(f'{mt.get_corridor_length(res.map)}, {mt.get_corridor_width(res.map)}\n')
+        else:
+            classication_file.write(f'BADMAP, BADMAP\n')
+        
+        plt.close()
+    classication_file.close()
+        
     return res_ret
 
 def flatten_dict(dict1):

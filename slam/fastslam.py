@@ -26,7 +26,7 @@ class FastSLAMSettings:
     r_std: float = 0.08
     phi_std: float = 10*np.pi/180
     psi_std: float = 5*np.pi/180
-    r_std_line: float = 0.08
+    r_std_line: float = 0.1
     phi_std_line: float = 10*np.pi/180
     t0: float = 0.0
     tf: float = np.inf
