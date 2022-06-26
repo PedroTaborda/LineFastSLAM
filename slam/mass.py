@@ -83,24 +83,25 @@ def slam_batch(settings: list[fs.FastSLAMSettings], sensor_data: sd.SensorData,
                 res = res_future.result()
                 if not os.path.exists(rel_path):
                     offline.save_slam_result(rel_path, res, settings_inst, sensor_data)
-        print(f"All jobs completed in {time.time() - t0:.3f} seconds. ({(time.time() - t0)/len(to_process):.3f}s per job)")
+        if len(to_process):
+            print(f"All jobs completed in {time.time() - t0:.3f} seconds. ({(time.time() - t0)/len(to_process):.3f}s per job)")
     else:
         for i, args in enumerate(to_process):
             sensor_data, settings_inst = args
             dt_iter.append(time.time() - dt_iter[-1])
             perform_slam(args)
             print(f"{i+1:05d}/{len(to_process):05d} Jobs done. {time.time() - t0:.3f}s elapsed", end="\n")
-        print(f"All jobs completed in {time.time() - t0:.3f} seconds. ({(time.time() - t0)/len(to_process):.3f}s per job)")
+        if len(to_process):
+            print(f"All jobs completed in {time.time() - t0:.3f} seconds. ({(time.time() - t0)/len(to_process):.3f}s per job)")
     print(f"Loading all results")    
     res_ret = []
     for s in settings:
-        res_settings_lst = []
         for i in range(repeats):
             new_settings = copy.copy(s)
             new_settings.rng_seed = i
             rel_path = os.path.join(results_dir, offline.file_name(new_settings, sensor_data))
             res = offline.load_slam_result(rel_path)
-        res_ret.append(res_settings_lst)
+        res_ret.append(res)
     return res_ret
 
 def flatten_dict(dict1):
