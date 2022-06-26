@@ -17,10 +17,13 @@ class SensorSettings:
     lidar_angular_resolution: float = 360       # Number of points in one full sweep
 
     # Sensor noise characterization
-    lidar_range_noise_sigma: float = 0.1          # Relative Multiplicative Error
+    lidar_range_noise_sigma: float = 0.05          # Relative Multiplicative Error
     lidar_angular_noise_sigma: float = 0.2        # Additive Error in deg
     odometry_angular_noise_sigma: float = 0.1   # Relative Multiplicative Error
     odometry_r_noise_sigma: float = 0.1         # Relative Multiplicative Error
+    aruco_r_mult_sigma : float = 0.1
+    aruco_angle_add_sigma : float = np.deg2rad(5)
+    aruco_orientation_add_sigma : float =np.deg2rad(5)
 
 class Sensor:
     def __init__(self, robot: Robot, map: UsimMap, sensor_parameters: SensorSettings = SensorSettings()) -> None:
@@ -39,6 +42,10 @@ class Sensor:
         self.lidar_angular_noise_sigma = sensor_parameters.lidar_angular_noise_sigma
         self.odometry_angular_noise_sigma = sensor_parameters.odometry_angular_noise_sigma
         self.odometry_r_noise_sigma = sensor_parameters.odometry_r_noise_sigma
+        
+        self.aruco_r_mult_sigma = sensor_parameters.aruco_r_mult_sigma
+        self.aruco_angle_add_sigma =  sensor_parameters.aruco_angle_add_sigma
+        self.aruco_orientation_add_sigma =  sensor_parameters.aruco_orientation_add_sigma 
 
         self.lidar_angles = np.linspace(0.0, 360.0, num=self.lidar_angular_resolution, endpoint=False)
 
@@ -101,7 +108,14 @@ class Sensor:
             is_in_fov = landmark_relative_angle > - self.camera_fov / 2 and landmark_relative_angle < self.camera_fov / 2
             is_in_range = landmark_relative_distance < self.camera_range
             if is_in_fov and is_in_range:
-                observed_landmarks += [(landmark_id, np.array([landmark_relative_distance, np.deg2rad(landmark_relative_angle), np.deg2rad(landmark_relative_orientation)]))]
+                noisy = np.array([landmark_relative_distance, np.deg2rad(landmark_relative_angle), np.deg2rad(landmark_relative_orientation)])
+                r_factor, theta_add, orientation_add = np.random.multivariate_normal(
+                    np.array([1, 0, 0]),
+                    np.diag([self.aruco_r_mult_sigma, self.aruco_angle_add_sigma, self.aruco_orientation_add_sigma])
+                )
+                noisy[0] = noisy[0]*r_factor
+                noisy[1:3] = noisy[1:3] + np.array([theta_add, orientation_add])
+                observed_landmarks += [(landmark_id, noisy)]
         
         return observed_landmarks
         
