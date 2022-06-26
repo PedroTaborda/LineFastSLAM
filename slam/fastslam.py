@@ -105,20 +105,21 @@ class FastSLAM:
         Args:
             odometry: The odometry data as a numpy array of [dx, dy, dtheta]
         """
+
+        self.trajectory_estimate += [(self.cur_time, self.pose_estimate())]
+
+        if actual_location is not None:
+            self.actual_trajectory += [(self.cur_time, actual_location)]
+
         def action(pose): return self.action_model(pose, odometry)
 
         for i in range(len(self.particles)):
-            self.particles[i].apply_action(action)
-
-        self.trajectory_estimate += [(t, self.pose_estimate())]
-
-        if actual_location is not None:
-            self.actual_trajectory += [(t, actual_location)]
+            self.particles[i].apply_action(action)        
 
         if t < self.cur_time:
             print(
                 f'[WARNING] ({inspect.currentframe().f_code.co_name}) Time is going backwards!\n\tLatest sample time: {self.cur_time}\n\tNew sample time: {t}')
-
+        self.cur_time = t
     def make_unoriented_observation(self, t: float, obs_data: tuple[int, tuple[float, float]]) -> None:
         """Updates all particles' maps using the observation data, and 
         reweighs the particles based on the likelihood of the observation.
