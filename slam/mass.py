@@ -154,7 +154,7 @@ def check_files(results_dir = 'slammed', sensor_data: sd.SensorData = None):
             for file_to_move, new_name in zip(to_move, new_names):
                 os.rename(file_to_move, new_name)
             print(f"{files[idx]} moved")
-        if sensor_data is not None and name != offline.file_name(settings_inst, sensor_data):
+        if False and sensor_data is not None and name != offline.file_name(settings_inst, sensor_data):
             print("Skipping file for different sensor data")
             continue
         print(f"{files[idx]+'.png'} -> {dif_repr(settings_inst)}")
