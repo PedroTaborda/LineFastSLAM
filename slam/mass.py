@@ -7,6 +7,7 @@ import copy
 import concurrent.futures
 import time
 import dataclasses
+from typing import Callable
 
 import numpy as np
 from slam.action_model import ActionModelSettings
@@ -157,7 +158,8 @@ def check_files(results_dir = 'slammed', sensor_data: sd.SensorData = None):
         if False and sensor_data is not None and name != offline.file_name(settings_inst, sensor_data):
             print("Skipping file for different sensor data")
             continue
-        print(f"{files[idx]+'.png'} -> {dif_repr(settings_inst)}")
+        simulated = "[SIMULATED]" if data.actual_trajectory is not None else ""
+        print(f"{files[idx]+'.png'} {simulated} -> {dif_repr(settings_inst)}")
 
 
 
