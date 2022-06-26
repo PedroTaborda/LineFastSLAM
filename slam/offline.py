@@ -179,6 +179,8 @@ def slam_sensor_data(data: sd.SensorData, slam_settings: fs.FastSLAMSettings = f
                 j += 1
                 if t < start_time or t > final_time:
                     continue
+                if len(data.camera[j]) != 3:
+                    continue
                 _, landmarks, CmpImg = data.camera[j]
                 if CmpImg is not None and show_images:
                     cam_ax.clear()
