@@ -72,7 +72,6 @@ def identify_lines(scan: np.ndarray, plot_ax: plt.Axes = None, demo: bool = Fals
     Returns:
         The identified lines as a list of tuples of (rh, th).
     """
-    np.random.seed(0)
     lines = []
     
     good = np.where(scan > 0.01)[0] 
